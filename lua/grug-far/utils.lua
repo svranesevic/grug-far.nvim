@@ -450,9 +450,11 @@ function M.getOpenTargetWin(context, buf)
   end
 
   -- no other window apart from grug-far one, create one
-  vim.cmd('leftabove vertical split')
+  vim.cmd('belowright split')
 
-  return vim.api.nvim_get_current_win()
+  local win = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_height(win, 20)
+  return win
 end
 
 return M
