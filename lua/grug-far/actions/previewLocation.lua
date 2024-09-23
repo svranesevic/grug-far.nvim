@@ -1,4 +1,6 @@
+local close = require('grug-far/actions/close')
 local resultsList = require('grug-far/render/resultsList')
+local utils = require('grug-far/utils')
 
 local function previewLocation(params)
   local buf = params.buf
@@ -33,6 +35,10 @@ local function previewLocation(params)
   vim.api.nvim_win_set_cursor(w, { location.lnum, location.col - 1 })
   local b = vim.fn.winbufnr(w)
   vim.api.nvim_set_option_value('bufhidden', 'wipe', { buf = b })
+
+  utils.setBufKeymap(b, 'Grug Far: Close', context.options.keymaps.close, function()
+    close({ buf = b, context = context })
+  end)
 end
 
 return previewLocation
