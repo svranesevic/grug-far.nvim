@@ -1,5 +1,5 @@
-local opts = require('grug-far/opts')
-local utils = require('grug-far/utils')
+local opts = require('grug-far.opts')
+local utils = require('grug-far.utils')
 
 ---@alias VirtText string[]
 
@@ -38,6 +38,10 @@ local function getHelpVirtLines(virt_lines, actions, context)
   end
 
   table.insert(virt_lines, line)
+
+  -- one blank line at end
+  table.insert(virt_lines, { { '' } })
+
   return virt_lines
 end
 

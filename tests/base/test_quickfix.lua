@@ -1,5 +1,5 @@
 local MiniTest = require('mini.test')
-local helpers = require('grug-far/test/helpers')
+local helpers = require('grug-far.test.helpers')
 local keymaps = helpers.getKeymaps()
 
 ---@type NeovimChild
@@ -61,8 +61,8 @@ T['can open quickfix list with deleted lines'] = function()
   })
   helpers.childWaitForFinishedStatus(child)
 
-  child.type_keys(10, '<esc>10G', 'dd')
-  child.type_keys(10, '<esc>13G', 'dd')
+  child.type_keys(10, '<esc>9G', 'dd')
+  child.type_keys(10, '<esc>12G', 'dd')
 
   child.type_keys('<esc>' .. keymaps.qflist.n)
   helpers.childWaitForScreenshotText(child, 'Quickfix List')

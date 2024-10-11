@@ -1,7 +1,7 @@
 local MiniTest = require('mini.test')
 local expect = MiniTest.expect
-local screenshot = require('grug-far/test/screenshot')
-local opts = require('grug-far/opts')
+local screenshot = require('grug-far.test.screenshot')
+local opts = require('grug-far.opts')
 
 local M = {}
 
@@ -146,6 +146,9 @@ function M.getSetupOptions()
       historyDir = vim.uv.cwd() .. '/temp_history_dir',
     },
     windowCreationCommand = 'tab split',
+    folding = {
+      enabled = false,
+    },
   }
 end
 
@@ -164,7 +167,7 @@ function M.initChildNeovim(child)
     [[ 
     GrugFar = require('grug-far')
     GrugFar.setup(...)
-    Helpers = require('grug-far/test/helpers')
+    Helpers = require('grug-far.test.helpers')
     vim.cmd('set showtabline=0')
   ]],
     {

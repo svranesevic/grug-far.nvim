@@ -1,4 +1,5 @@
-local treesitter = require('grug-far/render/treesitter')
+local treesitter = require('grug-far.render.treesitter')
+local resultsList = require('grug-far.render.resultsList')
 local M = {}
 
 ---@class GrugFarReplacementInterpreter
@@ -11,9 +12,9 @@ local M = {}
 ---@return GrugFarReplacementInterpreter?
 function M.getReplacementInterpreter(type)
   if type == 'lua' then
-    return require('grug-far/replacementInterpreter/luascript')
+    return require('grug-far.replacementInterpreter.luascript')
   elseif type == 'vimscript' then
-    return require('grug-far/replacementInterpreter/vimscript')
+    return require('grug-far.replacementInterpreter.vimscript')
   end
 
   return nil
@@ -29,6 +30,9 @@ function M.setReplacementInterpreter(buf, context, type)
   if currentType == type then
     return
   end
+
+  -- clear results as it can be slow to clear sytnax highlight otherwise
+  resultsList.clear(buf, context)
 
   -- clear old syntax highlighting
   treesitter.clear(buf)

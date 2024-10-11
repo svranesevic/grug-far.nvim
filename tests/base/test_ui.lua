@@ -1,5 +1,5 @@
 local MiniTest = require('mini.test')
-local helpers = require('grug-far/test/helpers')
+local helpers = require('grug-far.test.helpers')
 
 ---@type NeovimChild
 local child = MiniTest.new_child_neovim()
@@ -27,6 +27,13 @@ end
 T['can open with icons disabled'] = function()
   helpers.childRunGrugFar(child, {
     icons = { enabled = false },
+  })
+  helpers.childExpectScreenshot(child)
+end
+
+T['can open with help line disabled'] = function()
+  helpers.childRunGrugFar(child, {
+    helpLine = { enabled = false },
   })
   helpers.childExpectScreenshot(child)
 end

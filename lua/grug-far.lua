@@ -1,14 +1,14 @@
-local opts = require('grug-far/opts')
-local highlights = require('grug-far/highlights')
-local farBuffer = require('grug-far/farBuffer')
-local history = require('grug-far/history')
-local utils = require('grug-far/utils')
-local close = require('grug-far/actions/close')
-local engine = require('grug-far/engine')
-local replacementInterpreter = require('grug-far/replacementInterpreter')
-local fold = require('grug-far/fold')
-local inputs = require('grug-far/inputs')
-local fileIconsProvider = require('grug-far/fileIconsProvider')
+local opts = require('grug-far.opts')
+local highlights = require('grug-far.highlights')
+local farBuffer = require('grug-far.farBuffer')
+local history = require('grug-far.history')
+local utils = require('grug-far.utils')
+local close = require('grug-far.actions.close')
+local engine = require('grug-far.engine')
+local replacementInterpreter = require('grug-far.replacementInterpreter')
+local fold = require('grug-far.fold')
+local inputs = require('grug-far.inputs')
+local fileIconsProvider = require('grug-far.fileIconsProvider')
 
 local M = {}
 
@@ -130,6 +130,7 @@ local contextCount = 0
 ---@field highlightRegions LangRegions
 ---@field normalModeSearch boolean
 ---@field searchAgain boolean
+---@field searchDisabled boolean
 
 ---@class GrugFarAction
 ---@field text string
@@ -187,6 +188,7 @@ local function createContext(options)
       highlightResults = {},
       normalModeSearch = options.normalModeSearch,
       searchAgain = false,
+      searchDisabled = false,
     },
   }
 end
@@ -230,7 +232,7 @@ local function setupCleanup(buf, context)
     vim.api.nvim_buf_clear_namespace(buf, context.historyHlNamespace, 0, -1)
     vim.api.nvim_buf_clear_namespace(buf, context.helpHlNamespace, 0, -1)
     vim.api.nvim_del_augroup_by_id(context.augroup)
-    require('grug-far/render/treesitter').clear(buf)
+    require('grug-far.render.treesitter').clear(buf)
     fold.cleanup(context)
   end
 
@@ -290,6 +292,20 @@ function M._open_internal(options, params)
   return options.instanceName
 end
 
+--- returns instance name associated with given buf number
+--- if given buf number is 0, returns instance for current buffer
+---@param buf integer (same argument as for bufnr())
+---@return string?
+function M.get_instance_name_by_buf(buf)
+  local bufnr = vim.fn.bufnr(buf)
+  for instanceName, instance in pairs(namedInstances) do
+    if instance.buf == bufnr then
+      return instanceName
+    end
+  end
+  return nil
+end
+
 --- toggles given list of flags in the current grug-far buffer
 ---@param flags string[]
 function M.toggle_flags(flags)
@@ -297,24 +313,31 @@ function M.toggle_flags(flags)
     return {}
   end
 
-  local FLAGS_LINE_NO = 6
-  local flags_line = vim.fn.getline(FLAGS_LINE_NO)
+  local instanceName = M.get_instance_name_by_buf(0)
+  if not instanceName then
+    return
+  end
+
+  local instance = namedInstances[instanceName]
+
+  local flags_value = instance.context.state.inputs.flags
   local states = {}
   for _, flag in ipairs(flags) do
-    local i, j = flags_line:find(' ' .. flag, 1, true)
+    local i, j = flags_value:find(' ' .. flag, 1, true)
     if not i then
-      i, j = flags_line:find(flag, 1, true)
+      i, j = flags_value:find(flag, 1, true)
     end
 
     if i then
-      flags_line = flags_line:sub(1, i - 1) .. flags_line:sub(j + 1, -1)
+      flags_value = flags_value:sub(1, i - 1) .. flags_value:sub(j + 1, -1)
       table.insert(states, false)
     else
-      flags_line = flags_line .. ' ' .. flag
+      flags_value = flags_value .. ' ' .. flag
       table.insert(states, true)
     end
   end
-  vim.fn.setline(FLAGS_LINE_NO, flags_line)
+
+  inputs.fill(instance.context, instance.buf, { flags = flags_value }, false)
 
   return states
 end

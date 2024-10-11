@@ -1,7 +1,7 @@
-local opts = require('grug-far/opts')
-local utils = require('grug-far/utils')
-local treesitter = require('grug-far/render/treesitter')
-local ResultHighlightType = require('grug-far/engine').ResultHighlightType
+local opts = require('grug-far.opts')
+local utils = require('grug-far.utils')
+local treesitter = require('grug-far.render.treesitter')
+local ResultHighlightType = require('grug-far.engine').ResultHighlightType
 
 local M = {}
 
@@ -229,7 +229,7 @@ function M.appendWarning(buf, context, warning)
   end
   local lastline = vim.api.nvim_buf_line_count(buf)
 
-  local warn_lines = vim.split('\n\n' .. warning, '\n')
+  local warn_lines = vim.split(warning, '\n')
   setBufLines(buf, lastline, lastline, false, warn_lines)
 
   for i = lastline, lastline + #warn_lines - 1 do

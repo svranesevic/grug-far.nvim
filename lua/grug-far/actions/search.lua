@@ -1,6 +1,6 @@
-local renderResultsHeader = require('grug-far/render/resultsHeader')
-local resultsList = require('grug-far/render/resultsList')
-local fold = require('grug-far/fold')
+local renderResultsHeader = require('grug-far.render.resultsHeader')
+local resultsList = require('grug-far.render.resultsList')
+local fold = require('grug-far.fold')
 
 --- performs search
 ---@param params { buf: integer, context: GrugFarContext }
@@ -75,7 +75,11 @@ local function search(params)
     else
       if errorMessage and #errorMessage > 0 then
         resultsList.appendWarning(buf, context, errorMessage)
-        state.actionMessage = ' warnings, see end of buffer!'
+
+        local lastline = vim.api.nvim_buf_line_count(buf)
+        local winheight = vim.api.nvim_win_get_height(vim.fn.bufwinid(buf))
+        state.actionMessage = lastline < winheight and ' warnings!'
+          or ' warnings, see end of buffer!'
       end
       resultsList.highlight(buf, context)
     end

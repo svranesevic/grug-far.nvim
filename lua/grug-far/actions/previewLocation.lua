@@ -1,6 +1,6 @@
-local close = require('grug-far/actions/close')
-local resultsList = require('grug-far/render/resultsList')
-local utils = require('grug-far/utils')
+local close = require('grug-far.actions.close')
+local resultsList = require('grug-far.render.resultsList')
+local utils = require('grug-far.utils')
 
 local function previewLocation(params)
   local buf = params.buf

@@ -66,7 +66,7 @@ Grug find! Grug replace! Grug happy!
 - Neovim >= **0.10.0**
 - [BurntSushi/ripgrep](https://github.com/BurntSushi/ripgrep) >= 14 recommended
 - a [Nerd Font](https://www.nerdfonts.com/) **_(optional)_**
-- [ast-grep](https://ast-grep.github.io) **_(optional)_** if you would like to use the `ast-grep` search engine. Version >= `0.25.7` if you would like context lines flags to work.
+- [ast-grep](https://ast-grep.github.io) **_(optional)_** if you would like to use the `ast-grep` search engine. Version >= `0.25.7` if you would like context lines flags to work. Version >= `0.28.0` recommended for better performance as it has builtin `--globs` support.
 - either [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons) or [mini.icons](https://github.com/echasnovski/mini.icons) for file icons support **_(optional)_**
 
 Run `:checkhealth grug-far` if you see unexpected issues.
@@ -319,6 +319,20 @@ vim.api.nvim_create_autocmd('FileType', {
 ```
 (where `<localleader>o` and `<localleader>c` are the default keybindings for Open and Close actions. You will need to change them if you set them to something different)
 
+#### Create a buffer local keybinding to jump back to Search input
+``` lua
+vim.api.nvim_create_autocmd('FileType', {
+  group = vim.api.nvim_create_augroup('grug-far-keymap', { clear = true }),
+  pattern = { 'grug-far' },
+  callback = function()
+    -- jump back to search input by hitting left arrow in normal mode:
+    vim.keymap.set('n', '<left>', function()
+      vim.api.nvim_win_set_cursor(vim.fn.bufwinid(0), { 2, 0 })
+    end, { buffer = true })
+  end,
+})
+```
+
 #### Add nvim-tree integration to open search limited to focused directory or file
 
 Create a hotkey `z` in `nvim-tree` that will create/open a named instance of grug-far with the current directory of the file or directory in focus. On the second trigger, path of the grug-far instance will be updated, leaving other fields intact.
@@ -476,15 +490,6 @@ filetypes = {
   ["grug-far-history"] = false,
   ["grug-far-help"] = false,
 }
-```
-
-#### 2. Why do folds not appear when using which-key plugin?
-This is a known issue in which-key v3. See https://github.com/folke/which-key.nvim/issues/830
-The workaround is to exclude main `grug-far` filetype in which-key plugin config:
-```lua
-disable = {
-  ft = { 'grug-far' },
-},
 ```
 
 ## 📦 Similar Plugins / Inspiration

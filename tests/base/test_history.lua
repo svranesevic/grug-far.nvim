@@ -1,6 +1,6 @@
 local MiniTest = require('mini.test')
-local helpers = require('grug-far/test/helpers')
-local opts = require('grug-far/opts')
+local helpers = require('grug-far.test.helpers')
+local opts = require('grug-far.opts')
 local keymaps = helpers.getKeymaps()
 
 ---@type NeovimChild
@@ -175,7 +175,7 @@ T['replacement interpreter swaps when reloading from history'] = function()
   helpers.childWaitForScreenshotText(child, 'History')
   helpers.childExpectBufLines(child)
 
-  child.type_keys('<esc>11G', '<enter>')
+  child.type_keys('<esc>12G', '<enter>')
   helpers.childWaitForScreenshotText(child, '2 matches in 1 files')
   helpers.childWaitForScreenshotText(child, '[lua]')
   helpers.childExpectScreenshot(child)

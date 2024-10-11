@@ -1,5 +1,5 @@
 local MiniTest = require('mini.test')
-local helpers = require('grug-far/test/helpers')
+local helpers = require('grug-far.test.helpers')
 local keymaps = helpers.getKeymaps()
 
 ---@type NeovimChild
@@ -35,7 +35,7 @@ T['can preview a given location'] = function()
   })
   helpers.childWaitForFinishedStatus(child)
 
-  child.type_keys('<esc>10G')
+  child.type_keys('<esc>9G')
   child.type_keys('<esc>' .. keymaps.previewLocation.n)
   helpers.childWaitForScreenshotText(child, '│       grug walks')
   helpers.childExpectScreenshot(child)

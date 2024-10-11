@@ -1,5 +1,5 @@
 local MiniTest = require('mini.test')
-local helpers = require('grug-far/test/helpers')
+local helpers = require('grug-far.test.helpers')
 
 ---@type NeovimChild
 local child = MiniTest.new_child_neovim()
@@ -232,6 +232,28 @@ T['can search with replace string'] = function()
 
   helpers.childRunGrugFar(child, {
     prefills = { search = 'grug', replacement = 'curly' },
+  })
+
+  helpers.childWaitForFinishedStatus(child)
+
+  helpers.childExpectScreenshot(child)
+  helpers.childExpectBufLines(child)
+end
+
+T['can search with empty replace string'] = function()
+  helpers.writeTestFiles({
+    { filename = 'file1.txt', content = [[ grug walks ]] },
+    {
+      filename = 'file2.doc',
+      content = [[ 
+      grug talks and grug drinks
+      then grug thinks
+    ]],
+    },
+  })
+
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug', flags = '--replace=' },
   })
 
   helpers.childWaitForFinishedStatus(child)

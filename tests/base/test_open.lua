@@ -1,5 +1,5 @@
 local MiniTest = require('mini.test')
-local helpers = require('grug-far/test/helpers')
+local helpers = require('grug-far.test.helpers')
 local keymaps = helpers.getKeymaps()
 
 ---@type NeovimChild
@@ -36,7 +36,7 @@ T['can open a given location'] = function()
   })
   helpers.childWaitForFinishedStatus(child)
 
-  child.type_keys('<esc>11G')
+  child.type_keys('<esc>10G')
   child.type_keys('<esc>' .. keymaps.openLocation.n)
   helpers.childWaitForScreenshotText(child, '3,13')
   helpers.childExpectScreenshot(child)
@@ -172,7 +172,7 @@ T['can open a given location when only window in tabpage'] = function()
   })
   helpers.childWaitForFinishedStatus(child)
 
-  child.type_keys('<esc>11G')
+  child.type_keys('<esc>10G')
   child.type_keys('<esc>' .. keymaps.openLocation.n)
   helpers.childWaitForScreenshotText(child, '3,13')
   helpers.childExpectScreenshot(child)

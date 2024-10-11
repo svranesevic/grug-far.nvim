@@ -1,5 +1,5 @@
 local MiniTest = require('mini.test')
-local helpers = require('grug-far/test/helpers')
+local helpers = require('grug-far.test.helpers')
 
 ---@type NeovimChild
 local child = MiniTest.new_child_neovim()
@@ -239,6 +239,29 @@ T['can search with no matches'] = function()
   helpers.childRunGrugFar(child, {
     engine = 'astgrep',
     prefills = { search = 'george' },
+  })
+
+  helpers.childWaitForFinishedStatus(child)
+
+  helpers.childExpectScreenshot(child)
+  helpers.childExpectBufLines(child)
+end
+
+T['can search with files filter and no matches'] = function()
+  helpers.writeTestFiles({
+    {
+      filename = 'file2.ts',
+      content = [[ 
+    if (grug || talks) {
+      grug.walks(talks)
+    }
+    ]],
+    },
+  })
+
+  helpers.childRunGrugFar(child, {
+    engine = 'astgrep',
+    prefills = { search = 'george', filesFilter = '*.ts' },
   })
 
   helpers.childWaitForFinishedStatus(child)
