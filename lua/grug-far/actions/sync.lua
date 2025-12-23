@@ -1,5 +1,7 @@
 local renderResultsHeader = require('grug-far.render.resultsHeader')
 local resultsList = require('grug-far.render.resultsList')
+local tasks = require('grug-far.tasks')
+local inputs = require('grug-far.inputs')
 local uv = vim.uv
 
 --- gets action message to display
@@ -28,12 +30,13 @@ end
 --- figure out which files changed and how
 --- note startRow / endRow are zero-based
 ---@param buf integer
----@param context GrugFarContext
+---@param context grug.far.Context
 ---@param startRow integer
 ---@param endRow integer
----@return ChangedFile[]
-local function getChangedFiles(buf, context, startRow, endRow)
-  local isReplacing = context.engine.isSearchWithReplacement(context.state.inputs, context.options)
+---@param _inputs grug.far.Inputs
+---@return grug.far.ChangedFile[]
+local function getChangedFiles(buf, context, startRow, endRow, _inputs)
+  local isReplacing = context.engine.isSearchWithReplacement(_inputs, context.options)
 
   local changedFilesByFilename = {}
   resultsList.forEachChangedLocation(buf, context, startRow, endRow, function(location, newLine)
@@ -60,53 +63,56 @@ local function getChangedFiles(buf, context, startRow, endRow)
   return changedFiles
 end
 
----@class SyncParams
----@field buf integer
----@field context GrugFarContext
----@field startRow integer
----@field endRow integer
----@field on_success? fun()
-
 --- performs sync of lines in results area with corresponding original file locations
----@param params SyncParams
+---@param params {
+--- buf: integer,
+--- context: grug.far.Context,
+--- startRow: integer,
+--- endRow: integer,
+--- on_success?: fun(),
+--- shouldNotifyOnComplete?: boolean, -- defaults to true
+--- }
 local function sync(params)
   local buf = params.buf
   local context = params.context
   local startRow = params.startRow
   local endRow = params.endRow
   local on_success = params.on_success
+  local shouldNotifyOnComplete = params.shouldNotifyOnComplete ~= false
   local state = context.state
-  local abort = state.abort
 
-  if abort.sync then
+  if tasks.hasActiveTasksWithType(context, 'sync') then
     vim.notify('grug-far: sync already in progress', vim.log.levels.INFO)
     return
   end
 
-  if abort.replace then
+  if tasks.hasActiveTasksWithType(context, 'replace') then
     vim.notify('grug-far: replace in progress', vim.log.levels.INFO)
     return
   end
 
-  if abort.search then
+  if tasks.hasActiveTasksWithType(context, 'search') then
     vim.notify('grug-far: search in progress', vim.log.levels.INFO)
     return
   end
 
   if not context.engine.isSyncSupported() then
-    state.actionMessage = 'sync operation not suppored by current engine!'
+    state.actionMessage = 'sync operation not supported by current engine!'
     renderResultsHeader(buf, context)
     vim.notify('grug-far: ' .. state.actionMessage, vim.log.levels.INFO)
     return
   end
 
+  local task = tasks.createTask(context, 'sync')
   local startTime = uv.now()
-  local changedFiles = getChangedFiles(buf, context, startRow, endRow)
+  local _inputs = inputs.getValues(context, buf)
+  local changedFiles = getChangedFiles(buf, context, startRow, endRow, _inputs)
 
   if #changedFiles == 0 then
     state.actionMessage = 'no changes to sync!'
     renderResultsHeader(buf, context)
     vim.notify('grug-far: ' .. state.actionMessage, vim.log.levels.INFO)
+    tasks.finishTask(context, task)
     return
   end
 
@@ -131,15 +137,11 @@ local function sync(params)
     vim.notify('grug-far: ' .. state.actionMessage, vim.log.levels.INFO)
   end
 
-  state.abort.sync = context.engine.sync({
-    inputs = context.state.inputs,
+  task.abort = context.engine.sync({
+    inputs = _inputs,
     options = context.options,
     changedFiles = changedFiles,
-    report_progress = function(update)
-      if state.bufClosed then
-        return
-      end
-
+    report_progress = tasks.task_callback_wrap(context, task, function(update)
       state.status = 'progress'
       state.progressCount = state.progressCount + 1
       if update.type == 'update_count' then
@@ -148,59 +150,59 @@ local function sync(params)
       state.actionMessage = getActionMessage(nil, changesCount, changesTotal)
       renderResultsHeader(buf, context)
       resultsList.throttledForceRedrawBuffer(buf, context)
-    end,
-    on_finish = function(status, errorMessage, customActionMessage)
-      if state.bufClosed then
-        return
-      end
+    end),
+    on_finish = tasks.task_callback_wrap(
+      context,
+      task,
+      function(status, errorMessage, customActionMessage)
+        vim.api.nvim_set_option_value('modifiable', true, { buf = buf })
 
-      vim.api.nvim_set_option_value('modifiable', true, { buf = buf })
-      state.abort.sync = nil
+        if status == 'error' then
+          reportError(errorMessage)
+          tasks.finishTask(context, task)
+          return
+        end
 
-      if status == 'error' then
-        reportError(errorMessage)
-        return
-      end
+        if errorMessage and #errorMessage > 0 then
+          resultsList.appendWarning(buf, context, errorMessage)
+        end
 
-      if errorMessage and #errorMessage > 0 then
-        resultsList.appendWarning(buf, context, errorMessage)
-      end
+        state.status = status
+        vim.cmd('silent! checktime')
 
-      state.status = status
-      vim.cmd.checktime()
+        local wasAborted = status == nil and customActionMessage == nil
 
-      local wasAborted = status == nil and customActionMessage == nil
+        if wasAborted then
+          state.actionMessage = 'sync aborted at ' .. changesCount .. ' / ' .. changesTotal
+        elseif status == nil and customActionMessage then
+          state.actionMessage = customActionMessage
+        else
+          local time = uv.now() - startTime
+          -- not passing in total as 3rd arg cause of paranoia if counts don't end up matching
+          state.actionMessage = getActionMessage(
+            nil,
+            changesCount,
+            changesCount,
+            context.options.reportDuration and time or nil
+          )
+        end
 
-      if wasAborted then
-        state.actionMessage = 'sync aborted at ' .. changesCount .. ' / ' .. changesTotal
-      elseif status == nil and customActionMessage then
-        state.actionMessage = customActionMessage
-      else
-        local time = uv.now() - startTime
-        -- not passing in total as 3rd arg cause of paranoia if counts don't end up matching
-        state.actionMessage = getActionMessage(
-          nil,
-          changesCount,
-          changesCount,
-          context.options.reportDuration and time or nil
-        )
-      end
-
-      renderResultsHeader(buf, context)
-
-      vim.schedule(function()
+        renderResultsHeader(buf, context)
         resultsList.markUnsyncedLines(buf, context, startRow, endRow, true)
-      end)
+        tasks.finishTask(context, task)
 
-      if wasAborted or status == nil then
-        return
-      end
+        if wasAborted or status == nil then
+          return
+        end
 
-      vim.notify('grug-far: synced changes!', vim.log.levels.INFO)
-      if on_success then
-        on_success()
+        if shouldNotifyOnComplete then
+          vim.notify('grug-far: synced changes!', vim.log.levels.INFO)
+        end
+        if on_success then
+          on_success()
+        end
       end
-    end,
+    ),
   })
 end
 

@@ -18,14 +18,15 @@ Grug find! Grug replace! Grug happy!
 - Syntax highlighted search results
 - Search results folding
 - Multiline search & replace
+- Search/Replace within buffer range denoted by visual selection
 - "Preview" result source while "scrolling" through results 
 - Replace using lua interpreted replacement for each match
 
 #### Searching:
-<img width="1257" alt="image" src="https://github.com/user-attachments/assets/bb69a9b2-f89d-416c-9333-27d60d870959">
+<img width="1261" alt="image" src="https://github.com/user-attachments/assets/4d0dae67-1d2e-438a-b295-b4ae8081fa03" />
 
 #### Replacing:
-<img width="1257" alt="image" src="https://github.com/user-attachments/assets/cfe0aa1a-7906-409a-ae8b-bdcee3c8918a">
+<img width="1260" alt="image" src="https://github.com/user-attachments/assets/f033fab7-b12d-4227-8d6e-44dd1ce177b5" />
 
 <details>
 <summary>More screenshots:</summary>
@@ -36,23 +37,34 @@ Grug find! Grug replace! Grug happy!
 #### Help:
 <img width="1252" alt="image" src="https://github.com/user-attachments/assets/5da63e72-f768-46e7-a807-b26c6f44c42c">
 
+#### Searching within buffer range
+<img width="2508" alt="image" src="https://github.com/user-attachments/assets/203128a4-a0b7-424b-94c8-38ac8753c2f7" />
+
 #### History:
 <img width="1252" alt="image" src="https://github.com/user-attachments/assets/ee96bea6-62bc-4c39-b924-e5d42e70196a">
 
 #### Ast-grep multiline search and replace:
-<img width="1258" alt="image" src="https://github.com/user-attachments/assets/12cbc3f7-eebc-496b-83ca-9497fd1d7127">
+<img width="1254" alt="image" src="https://github.com/user-attachments/assets/1f07c536-ef41-476f-9a15-7f0715c0579c" />
 
 #### Ast-grep debug-query
 <img width="1251" alt="image" src="https://github.com/user-attachments/assets/20fab223-56b6-42ff-825b-0df3c0e8d625">
 
 #### Ripgrep with lua interpreted replacement
-![image](https://github.com/user-attachments/assets/84c16e54-7e17-4c6d-befd-89b2679270bb)
+<img width="1259" alt="image" src="https://github.com/user-attachments/assets/e2b9ca48-e0cc-49d1-b048-5042f40b774b" />
 
-#### Astgrep with vimscript interpreted replacement
-![image](https://github.com/user-attachments/assets/19945216-c365-4a03-b8e6-6742075afad6)
+#### Ast-grep with vimscript interpreted replacement
+<img width="1257" alt="image" src="https://github.com/user-attachments/assets/34eebeda-4e29-4fed-a751-eac3f879425c" />
 
+#### Ast-grep rules
+![image](https://github.com/user-attachments/assets/123c5c3e-85c1-45d3-89a1-167dc3376b62)
 
 </details>
+
+### Video
+
+*linkarzu* has kindly made a video which shows off some of the features in action (don't forget to thank him for his hard work by liking if you found it helpful):
+
+[![linkarzu youtube video](https://img.youtube.com/vi/AK1TSwJrB3k/0.jpg)](https://www.youtube.com/watch?v=AK1TSwJrB3k)
 
 ## 🤔 Philosophy
 
@@ -63,44 +75,36 @@ Grug find! Grug replace! Grug happy!
 
 ## ⚡️ Requirements
 
-- Neovim >= **0.10.0**
-- [BurntSushi/ripgrep](https://github.com/BurntSushi/ripgrep) >= 14 recommended
+- Neovim >= **0.11.0** (please use tag 1.6.3 for nvim 0.10)
+- [BurntSushi/ripgrep](https://github.com/BurntSushi/ripgrep) >= 14 supported, >= 15 recommended 
 - a [Nerd Font](https://www.nerdfonts.com/) **_(optional)_**
-- [ast-grep](https://ast-grep.github.io) **_(optional)_** if you would like to use the `ast-grep` search engine. Version >= `0.25.7` if you would like context lines flags to work. Version >= `0.28.0` recommended for better performance as it has builtin `--globs` support.
+- [ast-grep](https://ast-grep.github.io) **_(optional)_** if you would like to use the `ast-grep` search engine. Version >= `0.36` recommended.
 - either [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons) or [mini.icons](https://github.com/echasnovski/mini.icons) for file icons support **_(optional)_**
 
 Run `:checkhealth grug-far` if you see unexpected issues.
 
-## 📦 Installation
+## 📦 Installation & Configuration
 
 Using [lazy.nvim][lazy]:
 ```lua
   {
     'MagicDuck/grug-far.nvim',
+    -- Note (lazy loading): grug-far.lua defers all it's requires so it's lazy by default
+    -- additional lazy config to defer loading is not really needed...
     config = function()
+      -- optional setup call to override plugin options
+      -- alternatively you can set options with vim.g.grug_far = { ... }
       require('grug-far').setup({
         -- options, see Configuration section below
         -- there are no required options atm
-        -- engine = 'ripgrep' is default, but 'astgrep' can be specified
       });
     end
   },
-
 ```
 
-## ⚙️ Configuration
+For configuration, see more details in [:h grug-far][docs] 
 
-**grug-far.nvim** comes with the following:
-- [default options][opts] 
-- [highlights][highlights]
-
-**Note on the key mappings**: By default, grug-far, will use `<localleader>` for it's keymaps as that is the vim
-recommended way for plugins. See https://learnvimscriptthehardway.stevelosh.com/chapters/11.html#local-leader
-
-So to use that, make sure you have `<localleader>` configured. For example, to use `,` as the local leader:
-```
-vim.g.maplocalleader = ','
-```
+**Important Note:** Make sure you have `<localleader>` configured. By default, grug-far, will use `<localleader>` for its buffer local keymaps.
 
 ## 🚀 Usage
 
@@ -108,6 +112,8 @@ vim.g.maplocalleader = ','
 You can open a new *grug-far.nvim* vertical split buffer with the `:GrugFar` command.
 Note that command supports the typical `command-modifiers` like `botright`, `aboveleft`, etc. and visual ranges.
 In visual mode, the command will pre-fill the search string with the current visual selection.
+Note that if you would like to search and replace *within* the visual selection range, you should use `:GrugFarWithin` instead.
+
 Possibly best to map a keybind to it for easy triggering.
 Since it's *just a buffer*, you can edit in it as you see fit. The UI will try to guide
 you along and recover gracefully if you do things like `ggVGd` (delete all lines).
@@ -117,34 +123,49 @@ You can create multiple such buffers with potentially different searches, which 
 The buffers should be visible in the buffers list if you need to toggle to them.
 
 ### Searching and replacing
-Search and replace is accomplished by simply typing text on appropriately marked lines. Search will
-happen in a debounced manner as you type. In the options, you can also specify a minimum number of characters
-that one has to enter before search is triggered.
-You can also specify a files filter to narrow down your search and more ripgrep flags to refine it further.
-Error messages from ripgrep when entering invalid flags and so on are displayed to guide you along. 
+Searching is done by filling in the appropriate inputs and will happen in a debounced manner as you type. If you provide a replacement,
+a diff will be shown. To trigger the actual replacement, you need to invoke the `Replace` action (`<localleader>r` by default).
 
 _Note:_ When replacing matches with the empty string, you will be prompted to confirm, as the change is not
 visible in the results area due to UI considering it just a search. If you
 would like to see the actual replacement in the results area, add `--replace=` to the flags.
 
+In the options, you can also specify a minimum number of characters that one has to enter before search is triggered. By default it is 2.
+
+When searching, you can specify a files filter to narrow down your search and more flags to refine it further. Paths input can be used to
+target particular directories and files.
+
+_Note:_ Paths input supports relative and absolute paths, `~`, environment variables and "path providers". The latter are special strings that expand
+to a list of paths. Currently available `path providers` are:
+- `<buflist>`: expands to list of files corresponding to opened buffers
+- `<buflist-cwd>`: like `<buflist>`, but filtered down to files in cwd
+- `<qflist>`: expands to list of files corresponding to quickfix list
+- ... for a full list, see `:h grug-far-opts` and search for "path providers" ...
+
+Error messages from ripgrep/astgrep when entering invalid flags and so on are displayed to guide you along. 
+
 ### Replacing each match with the result of an interpreted script
 
-Some situations require the power of arbitrary code executed for each search to determine the proper replacements.
+Some situations require the power of arbitrary code executed for each search match to determine the proper replacements.
 In those cases, you can use the `Swap Replacement Interpreter` action to switch to a desired replacement interpreter,
 such as `lua` or `vimscript`.
-For example with the `lua` interpreter, this will allow you to write multi-line lua code, essentially the body of a lua function,
+For example, with the `lua` interpreter, this will allow you to write multi-line lua code, essentially the body of a lua function,
 in the `Replace:` input.
 
 You can use `match` to refer to each match and need to `return` the value you want to be the replacement.
 In the case of the `astgrep` engine, you will also have access to the meta variables by accessing them through the
-`vars` table. ex: `$A` is referred to by `vars.A`, `$$$ARGS` is referred to by `vars.ARGS`.
+`vars` table. e.g. `$A` is referred to by `vars.A`, `$$$ARGS` is referred to by `vars.ARGS`.
 
 It is a similar situation for the `vimscript` interpreter. 
 
 ### Syncing results lines back to originating files
 
-It is possible to sync the text of the lines in the results area back to their originating files.
-This operation is either done on the current cursor line (`Sync Line`), or on all lines (`Sync All`). 
+It is possible to sync the text of the lines in the results area back to their originating files. This allows for free-form
+editing of results within the grug-far buffer, or even the old `%s/foo/bar`.
+There are 3 types of actions that can accomplish this operation:
+1. `Sync Line` - syncs current line
+2. `Sync All` - syncs all lines
+3. `Apply Next`/`Apply Prev` - syncs current line/diff and smartly deletes it from the result buffer
 
 A sync will happen only if a line has changed in some way compared to the source file, so if there's 
 either a replacement taking place or you have manually edited it.
@@ -153,20 +174,19 @@ Deleting result lines will cause them to be excluded from being synced by `Sync 
 This can be a nice way to refine a replacement in some situations if you want to exclude a particular file
 or some particular matches.
 
-_Note:_ sync is only supported by `ripgrep` engine. The following explanation is `ripgrep` engine specific:
-
-If you don't edit the results list, `Sync All` and `Replace` have equivalent outcomes, except for one case. 
-When you do multi-line replace with `--multiline` and `--multiline-dot-all` flags, sync won't work so you 
-have to use replace. Essentially the difference it that `Replace` runs `rg --replace=... --passthrough` on 
-each file and does not depend at all on what's in the results area. `Sync All` does a line by line
-sync based on what's in the results area.
-
-_Note:_ changing the `<line-number>:<column>:` prefix of result lines will disable sync for that line
-
 _Note:_ sync is disabled when doing multiline replacement (`--multiline` flag)
 
 _Note:_ if you would like sync to work when doing a replacement with empty string, please add `--replace=`
 to the flags.
+
+_Note:_ sync is only supported by `ripgrep` engine. The following explanation on the difference between sync and replace 
+is `ripgrep` engine specific:
+
+If you don't edit the results list, `Sync All` and `Replace` have equivalent outcomes, except for one case. 
+When you do multi-line replace with `--multiline` and `--multiline-dot-all` flags, sync won't work so you 
+have to use replace. Essentially the difference is that `Replace` runs `rg --replace=... --passthrough` on 
+each file and does not depend at all on what's in the results area. `Sync All` does a line by line
+sync based on what's in the results area.
 
 ### Going to / Opening / Previewing Result Location
 When the cursor is placed on a result file path, you can go to that file by pressing `<enter>` in normal mode (`Goto` action default keybind).
@@ -175,9 +195,11 @@ is opened in the last window you were in before opening grug-far, which is typic
 
 If you would like to do the same thing, but have the cursor stay in place, you can use the `Open` action instead.
 
-_Note:_ for both `Goto` and `Open` actions, if a `<count>` is entered beforehand, the location corresponding to `<count>` result line is used instead of the current cursor line. You can set the option `resultLocation.showNumberLabel = true` if you would like to have a visual indication of the `<count>`.
+_Note:_ for both `Goto` and `Open` actions, if a `<count>` is entered beforehand, the location corresponding to `<count>` result line
+is used instead of the current cursor line. You can set the option `resultLocation.showNumberLabel = true` if you would like to
+have a visual indication of the `<count>`.
 
-In order to smoothly `Open` each result location in sequence, you can use the `Open Next` and `Open Prev` actions.
+In order to smoothly `Open` each result location in sequence, you can use the `Open Next`(`<down> by default`) and `Open Prev`(`<up>` by default) actions.
 
 If you would like to keep the buffers layout, you can use the `Preview` action instead, which will open location in a floating window.
 
@@ -185,9 +207,7 @@ If you would like to keep the buffers layout, you can use the `Preview` action i
 
 Result lines can be opened in the quickfix list. Deleting result lines will cause them not to be included. 
 
-_Note:_ changing the `<line-number>:<column>:` prefix of result lines will remove lines from consideration
-
-_Note:_ quickfix list is disabled when doing multiline replacement (`--multiline` flag)
+_Note:_ quickfix list action is disabled when doing multiline replacement (`--multiline` flag)
 
 ### History
 
@@ -198,68 +218,50 @@ When you would like to pick one of your history entries to reuse, you can use th
 open the search history as a buffer. From there you can pick an entry that will be auto-filled in.
 
 Note that you can edit the history buffer and save just like any other buffer if you need to do some cleanup.
-The format of a history entry is:
+The format of a history entry looks like:
 ```
-<optional comment, ex: My special search>
-Engine: <astgrep|ripgrep>(|lua)?
+<optional comment, e.g. My special search>
+Engine: <astgrep|astgrep-rules|ripgrep>(|lua)?
 Search: <text>
 Replace: <text>
 Files Filter: <text>
 Flags: <text>
 ```
-where `<text>` can span multiple line with the aid of a "continuation prefix" (`| `). ex:
+where `<text>` can span multiple line with the aid of a "continuation prefix" (`| `). e.g.
 ```
 Replace: something
 | additional replace text
 | more replace text
 ```
+Note that some engines might use other inputs. For example, `astgrep-rules` uses `Rules` instead of `Search` and does not have `Replace`.
 History entries are separated by one or more empty lines.
 
 _Note_: **grug-far** will ignore lines that do not start with the prefixes above
 
-### Seeing the full rg search command
-Sometimes, mostly for debug purposes, it's useful to see the full `rg` command that gets executed on search. You
-can toggle that on with the `Toggle Show rg Command` action, and the command will appear as the first thing in the
+### Seeing the full search command
+Sometimes, mostly for debug purposes, it's useful to see the full CLI command that gets executed on search. You
+can toggle that on with the `Toggle Show Command` action, and the command will appear as the first thing in the
 search results area.
 
 The command is shell-escaped, so you can copy and execute it in a shell manually if you need to.
 
 ### Aborting
-If you inadvertently launched a wrong search/sync/replace, you can abort early using the `Abort` action.
+If you inadvertently launched a wrong search/sync/replace or it's taking too long, you can abort early using the `Abort` action.
 
 ### Swapping search engine
-You can swap search engines with the `Swap Engine` action. Currently `ripgrep` (default) and `astgrep` are supported. 
+You can swap search engines with the `Swap Engine` action. Currently `ripgrep` (default), `astgrep`, and `astgrep-rules` are supported. 
+The list of available engines is configurable if you would like to only include some in the swap cycle.
+
+`ripgrep` uses the `rg` CLI command to search and replace. See [ripgrep docs](https://github.com/BurntSushi/ripgrep) for more information about CLI options and regex syntax.
+
+`astgrep` and `astgrep-rules` are two different interfaces to the `ast-grep` CLI command. `astgrep` is limited to single [patterns](https://ast-grep.github.io/guide/pattern-syntax.html), with `astgrep run --pattern=<your_search_string>`. `astgrep-rules` takes YAML input to define [rules](https://ast-grep.github.io/guide/rule-config.html), run with `sg scan --inline-rules=<your_rules_yaml>`, which is more verbose but more powerful. See [ast-grep docs](https://ast-grep.github.io/guide/introduction.html) for more information. grug-far will attempt to pre-populate reasonable YAML boilerplate when selecting the `astgrep-rules` engine. If you've been working on a pattern with `astgrep`, then swap engine to `astgrep-rules`, grug-far will include your existing pattern in the rule so you can build on it from there.
 
 ### Closing
-When you are done, it is recommended to close the buffer with the configured keybinding 
-(see Configuration section above) or just `:bd` in order to save on resources as some search results
-can be quite beefy in size. The advantage of using the `Close` action as opposed to just `:bd` is that it
-will ask you to confirm if there is a replace/sync in progress, as those would be aborted.
+When you are done, it is recommended to close the buffer with the configured keybinding (`<localleader>c` by default) 
+or just `:bd` in order to save on resources as some search results can be quite beefy in size. 
+The advantage of using the `Close` action as opposed to just `:bd` is that it will ask you to confirm if there is a replace/sync in progress, as those would be aborted.
 
-### Filetype
-Note that *grug-far.nvim* buffers will have `filetype=grug-far`, history buffers will have `filetype=grug-far-history` and help will have `filetype=grug-far-help` if you need filter/exclude them in any situations.
-Excluding seems to be necessary with copilot at the time of writing this.
-
-### ⚒️  Lua API
-
-For more control, you can programmatically open a grug-far buffer like so:
-```sh
-require('grug-far').open(opts)
-```
-If the above is called while in visual mode, it will pre-fill current visual selection as search text.
-(note, this will also set `--fixed-strings` flag as selection can contain special characters)
-
-Note that if you want to pre-fill current visual selection from command mode, you would have to use: 
-```
-:lua require('grug-far').with_visual_selection(opts)
-```
-(command mode is the only case where this is necessary in order to force using the visual selection)
-
-where `opts` will be merged with and override the global plugin options configured at setup time.
-
-See here for all the available [options][opts] 
-
-For more API, see [docs][docs]
+_Note_: If you open *grug-far* with the `transient = true` option, the buffer will be unlisted and fully deletes itself when not in use (i.e. when window is closed)
 
 ### 🥪 Cookbook
 
@@ -288,6 +290,34 @@ For more API, see [docs][docs]
 :<C-u>lua require('grug-far').with_visual_selection({ prefills = { paths = vim.fn.expand("%") } })
 ```
 
+#### Launch, limiting search to the current buffer visual selection range
+```lua
+:GrugFarWithin
+```
+or as a keymap if you want to go fully lua:
+```lua
+vim.keymap.set({ 'n', 'x' }, '<leader>si', function()
+  require('grug-far').open({ visualSelectionUsage = 'operate-within-range' })
+end, { desc = 'grug-far: Search within range' })
+```
+
+#### Launch, with @/ register value as the search query, falling back to visual selection
+Note that `@/` register holds your last `/` or `*`, etc search query.
+```lua
+vim.keymap.set({ 'n', 'x' }, '<leader>ss', function()
+  local search = vim.fn.getreg('/')
+  -- surround with \b if "word" search (such as when pressing `*`)
+  if search and vim.startswith(search, '\\<') and vim.endswith(search, '\\>') then
+    search = '\\b' .. search:sub(3, -3) .. '\\b'
+  end
+  require('grug-far').open({
+    prefills = {
+      search = search,
+    },
+  })
+end, { desc = 'grug-far: Search using @/ register value or visual selection' })
+```
+
 #### Toggle visibility of a particular instance and set title to a fixed string
 ```lua
 :lua require('grug-far').toggle_instance({ instanceName="far", staticTitle="Find and Replace" })
@@ -300,7 +330,7 @@ vim.api.nvim_create_autocmd('FileType', {
   pattern = { 'grug-far' },
   callback = function()
     vim.keymap.set('n', '<localleader>w', function()
-      local state = unpack(require('grug-far').toggle_flags({ '--fixed-strings' }))
+      local state = unpack(require('grug-far').get_instance(0):toggle_flags({ '--fixed-strings' }))
       vim.notify('grug-far: toggled --fixed-strings ' .. (state and 'ON' or 'OFF'))
     end, { buffer = true })
   end,
@@ -313,64 +343,79 @@ vim.api.nvim_create_autocmd('FileType', {
   group = vim.api.nvim_create_augroup('grug-far-keybindings', { clear = true }),
   pattern = { 'grug-far' },
   callback = function()
-    vim.api.nvim_buf_set_keymap(0, 'n', '<C-enter>', '<localleader>o<localleader>c', {})
-  end,
-})
-```
-(where `<localleader>o` and `<localleader>c` are the default keybindings for Open and Close actions. You will need to change them if you set them to something different)
-
-#### Create a buffer local keybinding to jump back to Search input
-``` lua
-vim.api.nvim_create_autocmd('FileType', {
-  group = vim.api.nvim_create_augroup('grug-far-keymap', { clear = true }),
-  pattern = { 'grug-far' },
-  callback = function()
-    -- jump back to search input by hitting left arrow in normal mode:
-    vim.keymap.set('n', '<left>', function()
-      vim.api.nvim_win_set_cursor(vim.fn.bufwinid(0), { 2, 0 })
+    vim.keymap.set('n', '<C-enter>', function()
+      require('grug-far').get_instance(0):open_location()
+      require('grug-far').get_instance(0):close()
     end, { buffer = true })
   end,
 })
 ```
 
-#### Add nvim-tree integration to open search limited to focused directory or file
+#### Create a buffer local keybinding to jump back to first input
+``` lua
+vim.api.nvim_create_autocmd('FileType', {
+  group = vim.api.nvim_create_augroup('grug-far-keymap', { clear = true }),
+  pattern = { 'grug-far' },
+  callback = function()
+    -- jump back to first input by hitting left arrow in normal mode:
+    vim.keymap.set('n', '<left>', function()
+      require('grug-far').get_instance(0):goto_first_input()
+    end, { buffer = true })
+  end,
+})
+```
 
-Create a hotkey `z` in `nvim-tree` that will create/open a named instance of grug-far with the current directory of the file or directory in focus. On the second trigger, path of the grug-far instance will be updated, leaving other fields intact.
+#### Add neo-tree integration to open search limited to focused directory or file
+
+Create a hotkey `z` in `neo-tree` that will create/open a named instance of grug-far with the current directory of the file or directory in focus. On the second trigger, path of the grug-far instance will be updated, leaving other fields intact.
 
 <details>
-<summary>Nvim tree lazy plugin setup</summary>
+<summary>Neo tree lazy plugin setup</summary>
 
 Small video of it in action: https://github.com/MagicDuck/grug-far.nvim/issues/165#issuecomment-2257439367
 
 ```lua
 return {
-  "nvim-tree/nvim-tree.lua",
+  "nvim-neo-tree/neo-tree.nvim",
   dependencies = "nvim-tree/nvim-web-devicons",
   config = function()
-    -- https://github.com/nvim-tree/nvim-tree.lua/blob/master/lua/nvim-tree.lua#L342
-    require("nvim-tree").setup {
+    local function open_grug_far(prefills)
+      local grug_far = require("grug-far")
+
+      if not grug_far.has_instance("explorer") then
+        grug_far.open({ instanceName = "explorer" })
+      else
+        grug_far.get_instance('explorer'):open()
+      end
+      -- doing it seperately because multiple paths doesn't open work when passed with open
+      -- updating the prefills without clearing the search and other fields
+      grug_far.get_instance('explorer'):update_input_values(prefills, false)
+    end
+    require("neo-tree").setup {
       commands = {
         -- create a new neo-tree command
         grug_far_replace = function(state)
           local node = state.tree:get_node()
           local prefills = {
-            -- get the current path and get the parent directory if a file is selected
-            paths = node.type == "directory" and node:get_id() or vim.fn.fnamemodify(node:get_id(), ":h"),
+            -- also escape the paths if space is there
+            -- if you want files to be selected, use ':p' only, see filename-modifiers
+            paths = node.type == "directory" and vim.fn.fnameescape(vim.fn.fnamemodify(node:get_id(), ":p"))
+        or vim.fn.fnameescape(vim.fn.fnamemodify(node:get_id(), ":h")),
           }
-
-          local grug_far = require "grug-far"
-          -- instance check
-          if not grug_far.has_instance "explorer" then
-            grug_far.open {
-              instanceName = "explorer",
-              prefills = prefills,
-              staticTitle = "Find and Replace from Explorer",
-            }
-          else
-            grug_far.open_instance "explorer"
-            -- updating the prefills without clearing the search and other fields
-            grug_far.update_instance_prefills("explorer", prefills, false)
+          open_grug_far(prefills)
+        end,
+        -- https://github.com/nvim-neo-tree/neo-tree.nvim/blob/fbb631e818f48591d0c3a590817003d36d0de691/doc/neo-tree.txt#L535
+        grug_far_replace_visual = function(state, selected_nodes, callback)
+          local paths = {}
+          for _, node in pairs(selected_nodes) do
+            -- also escape the paths if space is there
+            -- if you want files to be selected, use ':p' only, see filename-modifiers
+            local path = node.type == "directory" and vim.fn.fnameescape(vim.fn.fnamemodify(node:get_id(), ":p"))
+        or vim.fn.fnameescape(vim.fn.fnamemodify(node:get_id(), ":h"))
+            table.insert(paths, path)
           end
+          local prefills = { paths = table.concat(paths, "\n") }
+          open_grug_far(prefills)
         end,
       },
       window = {
@@ -415,9 +460,9 @@ return {
                 staticTitle = "Find and Replace from Explorer",
               }
             else
-              grug_far.open_instance "explorer"
+              grug_far.get_instance('explorer'):open()
               -- updating the prefills without clearing the search and other fields
-              grug_far.update_instance_prefills("explorer", prefills, false)
+              grug_far.get_instance('explorer'):update_input_values(prefills, false)
             end
           end,
           desc = "oil: Search in directory",
@@ -463,9 +508,9 @@ return {
           staticTitle = "Find and Replace from Explorer",
         }
       else
-        grug_far.open_instance "explorer"
+        grug_far.get_instance('explorer'):open()
         -- updating the prefills without crealing the search and other fields
-        grug_far.update_instance_prefills("explorer", prefills, false)
+        grug_far.get_instance('explorer'):update_input_values(prefills, false)
       end
     end
 
@@ -499,7 +544,6 @@ filetypes = {
 - [lazy.nvim][lazy]: used their beautiful `README.md` as a template
 - [plugin-template.nvim][neovim-plugin-template]: super handy template, this plugin is based on it! 
 
-[opts]: lua/grug-far/opts.lua
 [docs]: doc/grug-far.txt
 [highlights]: lua/grug-far/highlights.lua
 [lazy]: https://github.com/folke/lazy.nvim

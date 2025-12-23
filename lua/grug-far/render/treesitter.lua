@@ -1,8 +1,8 @@
 ---@alias Region (Range4|Range6|TSNode)[]
 ---@alias LangRegions table<string, Region[]>
----@alias FileResults table<string, {ft: string?, lines: ResultLine[]}>
+---@alias FileResults table<string, {ft: string?, lines: grug.far.ResultLine[]}>
 
----@class ResultLine
+---@class grug.far.ResultLine
 ---@field row number row in the result buffer for this line
 ---@field col number col in the result buffer for this line
 ---@field end_col number end col in the result buffer for this line
@@ -101,13 +101,15 @@ function M._attach_lang(buf, lang, regions, regionsId)
   end
 
   if not entry then
-    local ok, parser = pcall(vim.treesitter.languagetree.new, buf, lang)
-    if not ok then
+    local ok, parser = pcall(vim.treesitter.get_parser, buf, lang)
+    if not ok or not parser then
       return
     end
+    ---@diagnostic disable-next-line: invisible
     parser:set_included_regions(regions)
     M.cache[buf][cacheKey] = {
       parser = parser,
+      ---@diagnostic disable-next-line: invisible
       highlighter = TSHighlighter.new(parser),
       regionsId = regionsId,
     }

@@ -17,7 +17,8 @@ local T = MiniTest.new_set({
 
 T['can create instance, open, close and kill it'] = function()
   -- create it
-  local instanceName = helpers.childRunGrugFar(child, { staticTitle = 'Find and Replace' })
+  local instanceName = 'bob_instance'
+  helpers.childRunGrugFar(child, { staticTitle = 'Find and Replace', instanceName = instanceName })
   helpers.childWaitForScreenshotText(child, 'Search:')
   helpers.childExpectScreenshot(child)
 
@@ -78,20 +79,24 @@ T['can update instance prefills'] = function()
   })
 
   -- create it
-  local instanceName = helpers.childRunGrugFar(child, {
+  local instanceName = 'bob_instance'
+  helpers.childRunGrugFar(child, {
     staticTitle = 'Find and Replace',
     prefills = { search = 'grug' },
+    instanceName = instanceName,
   })
   helpers.childWaitForScreenshotText(child, '5 matches in 2 files')
 
   -- prefill while keeping existing
   child.lua('GrugFar.update_instance_prefills(...)', { instanceName, { paths = 'file1.txt' } })
   helpers.childWaitForScreenshotText(child, '2 matches in 1 files')
+  helpers.childWaitForFinishedStatus(child)
   helpers.childExpectScreenshot(child)
 
   -- prefill while clearing old
   child.lua('GrugFar.update_instance_prefills(...)', { instanceName, { search = 'walks' }, true })
   helpers.childWaitForScreenshotText(child, '1 matches in 1 files')
+  helpers.childWaitForFinishedStatus(child)
   helpers.childExpectScreenshot(child)
 end
 

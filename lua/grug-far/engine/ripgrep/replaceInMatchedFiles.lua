@@ -5,15 +5,15 @@ local argUtils = require('grug-far.engine.ripgrep.argUtils')
 local getArgs = require('grug-far.engine.ripgrep.getArgs')
 local parseResults = require('grug-far.engine.ripgrep.parseResults')
 
----@class replaceInFileParams
----@field inputs GrugFarInputs
----@field options GrugFarOptions
+---@class grug.far.replaceInFileParams
+---@field inputs grug.far.Inputs
+---@field options grug.far.Options
 ---@field replacement_eval_fn fun(...): (string?, string?)
 ---@field file string
 ---@field on_done fun(errorMessage: string?)
 
 --- performs replacement in given file
----@param params replaceInFileParams
+---@param params grug.far.replaceInFileParams
 ---@return fun()? abort
 local function replaceInFile(params)
   local file = params.file
@@ -47,7 +47,7 @@ local function replaceInFile(params)
 end
 
 --- performs replacement in given file with eval
----@param params replaceInFileParams
+---@param params grug.far.replaceInFileParams
 ---@return fun()? abort
 local function replaceInFileWithEval(params)
   local file = params.file
@@ -73,24 +73,21 @@ local function replaceInFileWithEval(params)
         return
       end
 
-      local json_lines = vim.split(data, '\n')
-      for _, json_line in ipairs(json_lines) do
-        if #json_line > 0 then
-          local entry = vim.json.decode(json_line)
-          if entry.type == 'match' then
-            for _, submatch in ipairs(entry.data.submatches) do
-              local replacementText, err = replacement_eval_fn(submatch.match.text)
-              if err then
-                chunk_error = err
-                if abort then
-                  abort()
-                end
-                return
+      local json_list = utils.str_to_json_list(data)
+      for _, entry in ipairs(json_list) do
+        if entry.type == 'match' then
+          for _, submatch in ipairs(entry.data.submatches) do
+            local replacementText, err = replacement_eval_fn(submatch.match.text)
+            if err then
+              chunk_error = err
+              if abort then
+                abort()
               end
-              submatch.replacement = { text = replacementText }
+              return
             end
-            table.insert(json_data, entry)
+            submatch.replacement = { text = replacementText }
           end
+          table.insert(json_data, entry)
         end
       end
     end,
@@ -127,16 +124,15 @@ local function replaceInFileWithEval(params)
   return abort
 end
 
----@class replaceInMatchedFilesParams
----@field inputs GrugFarInputs
----@field options GrugFarOptions
----@field replacement_eval_fn fun(...): (string?, string?)
----@field files string[]
----@field report_progress fun(count: integer)
----@field on_finish fun(status: GrugFarStatus, errorMessage: string?)
-
 --- performs replacement in given matched file
----@param params replaceInMatchedFilesParams
+---@param params {
+--- inputs: grug.far.Inputs,
+--- options: grug.far.Options,
+--- replacement_eval_fn: fun(...): (string?, string?),
+--- files: string[],
+--- report_progress: fun(count: integer),
+--- on_finish: fun(status: grug.far.Status, errorMessage: string?),
+--- }
 local function replaceInMatchedFiles(params)
   local files = vim.deepcopy(params.files)
   local report_progress = params.report_progress

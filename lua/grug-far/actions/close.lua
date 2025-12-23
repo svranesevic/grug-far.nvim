@@ -1,21 +1,21 @@
 --- closes the buffer, thus freeing resources
----@param params { context: GrugFarContext, buf: integer }
+---@param params { context: grug.far.Context, buf: integer }
 local function close(params)
   local context = params.context
   local buf = params.buf
   local state = context.state
 
-  local runningTask = nil
-  for task_name, abort_fn in pairs(state.abort) do
-    -- note: we only care about warning user when aborting stuff other than a search
-    if task_name ~= 'search' and abort_fn then
-      runningTask = task_name
-    end
-  end
+  local runningNonSearchTasks = vim
+    .iter(state.tasks)
+    :filter(function(task)
+      return task.type ~= 'search' and not task.isFinished
+    end)
+    :totable()
 
-  if runningTask then
+  if #runningNonSearchTasks > 0 then
     local choice = vim.fn.confirm(
-      runningTask .. ' task will be aborted. Are you sure you want to close grug-far buffer?',
+      runningNonSearchTasks[1].type
+        .. ' task will be aborted. Are you sure you want to close grug-far buffer?',
       '&yes\n&cancel'
     )
     if choice == 2 then

@@ -1,4 +1,6 @@
----@type GrugFarReplacementInterpreter
+local exec_error_prefix = 'nvim_exec2%(%)%[%d+]%.%.'
+
+---@type grug.far.ReplacementInterpreter
 local VimscriptInterpreter = {
   type = 'vimscript',
 
@@ -8,9 +10,9 @@ local VimscriptInterpreter = {
     local exec_success, exec_error = pcall(
       vim.api.nvim_exec2,
       'function! __grug_far_vimscript_eval('
-        .. vim.fn.join(arg_names, ', ')
+        .. table.concat(arg_names, ', ')
         .. ')\n'
-        .. vim.fn.join(
+        .. table.concat(
           vim
             .iter(arg_names)
             :map(function(arg_name)
@@ -30,11 +32,17 @@ local VimscriptInterpreter = {
           return result and tostring(result) or '', nil
         else
           return nil,
-            'Replace [vimscript]:\n' .. result:gsub('function __grug_far_vimscript_eval, ', '')
+            'Replace [vimscript]:\n' .. result
+              :gsub('function __grug_far_vimscript_eval, ', '')
+              :gsub(exec_error_prefix, '')
         end
       end
     else
-      return nil, 'Replace [vimscript]:\n' .. (exec_error or 'could not evaluate vimscript chunk')
+      local err = exec_error --[[@as string?]]
+      if err then
+        err = err:gsub(exec_error_prefix, '')
+      end
+      return nil, 'Replace [vimscript]:\n' .. (err or 'could not evaluate vimscript chunk')
     end
   end,
 }

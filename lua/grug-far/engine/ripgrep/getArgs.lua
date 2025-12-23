@@ -2,8 +2,8 @@ local utils = require('grug-far.utils')
 local getRgVersion = require('grug-far.engine.ripgrep.getRgVersion')
 
 --- get args for ripgrep or nil if params invalid / insufficient
----@param inputs GrugFarInputs
----@param options GrugFarOptions
+---@param inputs grug.far.Inputs
+---@param options grug.far.Options
 ---@param extraArgs string[]
 ---@param blacklistedFlags? string[]
 ---@param forceReplace? boolean
@@ -43,7 +43,9 @@ local function getArgs(inputs, options, extraArgs, blacklistedFlags, forceReplac
   end
 
   if #inputs.paths > 0 then
-    local paths = utils.splitPaths(inputs.paths)
+    ---@diagnostic disable-next-line: undefined-field
+    local context = options.__grug_far_context__
+    local paths = utils.normalizePaths(utils.splitPaths(inputs.paths), context)
     for _, path in ipairs(paths) do
       table.insert(args, path)
     end
@@ -71,6 +73,11 @@ local function getArgs(inputs, options, extraArgs, blacklistedFlags, forceReplac
   if #inputs.filesFilter > 0 then
     for _, fileFilter in ipairs(vim.split(inputs.filesFilter, '\n')) do
       local glob = vim.trim(fileFilter)
+      if utils.is_win then
+        -- convert backslashes to forward slashes in glob on windows as globset
+        -- does not support windows style paths
+        glob = vim.fs.normalize(fileFilter)
+      end
       if #glob > 0 then
         table.insert(args, '--glob=' .. glob)
       end
@@ -82,7 +89,7 @@ local function getArgs(inputs, options, extraArgs, blacklistedFlags, forceReplac
   end
 
   if #inputs.search > 0 then
-    table.insert(args, '--regexp=' .. inputs.search)
+    table.insert(args, '--regexp=' .. inputs.search:gsub('\n', utils.eol))
   end
 
   return args, nil

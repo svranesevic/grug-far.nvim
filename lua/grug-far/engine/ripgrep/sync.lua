@@ -1,6 +1,7 @@
 local syncChangedFiles = require('grug-far.engine.syncChangedFiles')
 local getArgs = require('grug-far.engine.ripgrep.getArgs')
 local utils = require('grug-far.utils')
+local syncBufrange = require('grug-far.engine.syncBufrange')
 
 local M = {}
 
@@ -19,7 +20,7 @@ local function isMultilineSearchReplace(args)
 end
 
 --- does sync
----@param params EngineSyncParams
+---@param params grug.far.EngineSyncParams
 ---@return fun()? abort
 M.sync = function(params)
   local on_finish = params.on_finish
@@ -31,18 +32,39 @@ M.sync = function(params)
   end
 
   if isMultilineSearchReplace(args) then
-    on_finish(nil, nil, 'sync disabled for multline search/replace!')
+    on_finish(nil, nil, 'sync disabled for multiline search/replace!')
     return
   end
 
-  return syncChangedFiles({
-    options = params.options,
-    report_progress = function(count)
-      params.report_progress({ type = 'update_count', count = count })
-    end,
-    on_finish = params.on_finish,
-    changedFiles = params.changedFiles,
-  })
+  local bufrange, bufrange_err = utils.getBufrange(params.inputs.paths)
+  if bufrange_err then
+    params.on_finish('error', bufrange_err)
+    return
+  end
+
+  if bufrange then
+    return syncBufrange({
+      changes = params.changedFiles[1],
+      bufrange = bufrange,
+      on_done = function(err)
+        if err then
+          params.on_finish('error', err)
+        else
+          params.report_progress({ type = 'update_count', count = 1 })
+          params.on_finish('success')
+        end
+      end,
+    })
+  else
+    return syncChangedFiles({
+      options = params.options,
+      report_progress = function(count)
+        params.report_progress({ type = 'update_count', count = count })
+      end,
+      on_finish = params.on_finish,
+      changedFiles = params.changedFiles,
+    })
+  end
 end
 
 return M

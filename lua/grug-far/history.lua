@@ -1,10 +1,15 @@
 local utils = require('grug-far.utils')
+local inputs = require('grug-far.inputs')
+local replacementInterpreter = require('grug-far.replacementInterpreter')
+local engine = require('grug-far.engine')
+local resultsList = require('grug-far.render.resultsList')
+local search = require('grug-far.actions.search')
 local M = {}
 
 local continuation_prefix = '| '
 local engine_field_sep = '|'
 
----@param context GrugFarContext
+---@param context grug.far.Context
 ---@return string
 function M.getHistoryFilename(context)
   local historyDir = context.options.history.historyDir
@@ -29,14 +34,24 @@ local function formatInputValue(value)
   for i, line in ipairs(lines) do
     table.insert(result, i == 1 and line or continuation_prefix .. line)
   end
-  return vim.fn.join(result, '\n')
+  return table.concat(result, '\n')
 end
 
 --- adds entry to history
----@param context GrugFarContext
+---@param context grug.far.Context
+---@param buf integer
 ---@param notify? boolean
-function M.addHistoryEntry(context, notify)
-  local inputs = context.state.inputs
+function M.addHistoryEntry(context, buf, notify)
+  local inputsLen = 0
+  local _inputs = inputs.getValues(context, buf)
+  for _, input in ipairs(context.engine.inputs) do
+    local value = _inputs[input.name]
+    inputsLen = inputsLen + #value
+  end
+
+  if inputsLen == 0 then
+    return -- nothing to save
+  end
   local historyFilename = M.getHistoryFilename(context)
   local callback = vim.schedule_wrap(function(err)
     if notify then
@@ -56,18 +71,15 @@ function M.addHistoryEntry(context, notify)
     vim.schedule(function()
       local entry = '\n\nEngine: '
         .. context.engine.type
-        .. (context.replacementInterpreter and engine_field_sep .. context.replacementInterpreter.type or '')
-        .. '\nSearch: '
-        .. formatInputValue(inputs.search)
-        .. '\nReplace: '
-        .. formatInputValue(inputs.replacement)
-        .. '\nFiles Filter: '
-        .. formatInputValue(inputs.filesFilter)
-        .. '\nFlags: '
-        .. formatInputValue(inputs.flags)
-        .. '\nPaths: '
-        .. formatInputValue(inputs.paths)
-        .. '\n'
+        .. (
+          context.replacementInterpreter
+            and engine_field_sep .. context.replacementInterpreter.type
+          or ''
+        )
+      for _, input in ipairs(context.engine.inputs) do
+        entry = entry .. '\n' .. input.label .. ': ' .. formatInputValue(_inputs[input.name])
+      end
+      entry = entry .. '\n'
 
       -- dedupe last entry
       local newContents = contents or ''
@@ -121,7 +133,7 @@ local function getFirstValueStartingWith(entryLines, pattern)
   return value
 end
 
----@class HistoryEntry
+---@class grug.far.HistoryEntry
 ---@field engine string
 ---@field replacementInterpreter? string
 ---@field search string
@@ -132,20 +144,62 @@ end
 
 --- gets history entry from list of lines
 ---@param lines string[]
----@return HistoryEntry
+---@return grug.far.HistoryEntry
 function M.getHistoryEntryFromLines(lines)
   local engine_val = getFirstValueStartingWith(lines, 'Engine:[ ]?')
-  local engine, replacementInterpreter = unpack(vim.split(engine_val, engine_field_sep))
+  local engineType, _replacementInterpreter = unpack(vim.split(engine_val, engine_field_sep))
 
-  return {
-    engine = vim.trim(engine),
-    replacementInterpreter = replacementInterpreter and vim.trim(replacementInterpreter) or nil,
-    search = getFirstValueStartingWith(lines, 'Search:[ ]?'),
-    replacement = getFirstValueStartingWith(lines, 'Replace:[ ]?'),
-    filesFilter = getFirstValueStartingWith(lines, 'Files Filter:[ ]?'),
-    flags = getFirstValueStartingWith(lines, 'Flags:[ ]?'),
-    paths = getFirstValueStartingWith(lines, 'Paths:[ ]?'),
+  local entry = {
+    engine = vim.trim(engineType),
+    replacementInterpreter = _replacementInterpreter and vim.trim(_replacementInterpreter) or nil,
   }
+
+  local _engine = engine.getEngine(engineType)
+  for _, input in ipairs(_engine.inputs) do
+    entry[input.name] = getFirstValueStartingWith(lines, input.label .. ':[ ]?')
+  end
+
+  return entry
+end
+
+--- fills inputs based on a history entry
+---@param context grug.far.Context
+---@param buf integer
+---@param entry grug.far.HistoryEntry
+---@param callback? fun()
+function M.fillInputsFromEntry(context, buf, entry, callback)
+  context.state.searchDisabled = true
+
+  local _inputs = inputs.getValues(context, buf)
+  context.engine = engine.getEngine(entry.engine)
+
+  -- get the values and stuff them into savedValues
+  for name, value in pairs(_inputs) do
+    context.state.previousInputValues[name] = value
+  end
+  -- clear the values and input label extmarks from the buffer
+  vim.api.nvim_buf_set_lines(buf, 0, 0, false, {})
+  vim.api.nvim_buf_clear_namespace(buf, context.namespace, 0, -1)
+  context.extmarkIds = {}
+
+  vim.schedule(function()
+    inputs.fill(context, buf, entry --[[@as grug.far.Prefills]], true)
+    if entry.replacementInterpreter then
+      replacementInterpreter.setReplacementInterpreter(buf, context, entry.replacementInterpreter)
+    end
+
+    local win = vim.fn.bufwinid(buf)
+    pcall(vim.api.nvim_win_set_cursor, win, { context.options.startCursorRow, 0 })
+    resultsList.clear(buf, context)
+    if callback then
+      callback()
+    end
+
+    search({ buf = buf, context = context })
+    -- prevent search on change (double search) since we are searching manually already
+    context.state.lastInputs = vim.deepcopy(inputs.getValues(context, buf))
+    context.state.searchDisabled = false
+  end)
 end
 
 return M

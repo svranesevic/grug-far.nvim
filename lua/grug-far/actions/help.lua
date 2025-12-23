@@ -5,7 +5,7 @@ local opts = require('grug-far.opts')
 
 --- adds given highlighted lines to help buffer
 ---@param helpBuf integer
----@paratem context GrugFarContext
+---@paratem context grug.far.Context
 ---@param lines HlText[][]
 ---@param indent integer
 local function add_highlighted_lines(helpBuf, context, lines, indent)
@@ -21,13 +21,12 @@ local function add_highlighted_lines(helpBuf, context, lines, indent)
       local hlGroup = hlText[2]
       local textLen = #hlText[1]
       if hlGroup and textLen > 0 then
-        vim.api.nvim_buf_add_highlight(
+        vim.hl.range(
           helpBuf,
           context.helpHlNamespace,
           hlGroup,
-          i - 1,
-          pos,
-          pos + textLen
+          { i - 1, pos },
+          { i - 1, pos + textLen }
         )
       end
       pos = pos + textLen
@@ -37,7 +36,7 @@ end
 
 --- renders contents of history buffer
 ---@param helpBuf integer
----@param context GrugFarContext
+---@param context grug.far.Context
 local function renderHelpBuffer(helpBuf, context)
   local lines = {
     { { 'Actions:', 'GrugFarHelpWinHeader' } },
@@ -68,22 +67,23 @@ local function renderHelpBuffer(helpBuf, context)
 end
 
 --- creates help window
----@param context GrugFarContext
+---@param context grug.far.Context
 local function createHelpWindow(context)
   local helpBuf = vim.api.nvim_create_buf(false, true)
   local width = vim.api.nvim_win_get_width(0) - 2
   local height = math.floor(vim.api.nvim_win_get_height(0) / 2)
-  local helpWin = vim.api.nvim_open_win(helpBuf, true, {
+  local helpWinConfig = vim.tbl_extend('force', {
     relative = 'win',
     row = 0,
     col = 2,
     width = width,
     height = height,
-    border = 'rounded',
     footer = (opts.getIcon('helpTitle', context) or ' ') .. 'Help (press <q> or <esc> to close)',
     footer_pos = 'center',
+    border = 'rounded',
     style = 'minimal',
-  })
+  }, context.options.helpWindow)
+  local helpWin = vim.api.nvim_open_win(helpBuf, true, helpWinConfig)
   vim.api.nvim_set_option_value('wrap', true, { win = helpWin })
 
   -- delete buffer on window close
@@ -119,7 +119,7 @@ local function createHelpWindow(context)
 end
 
 --- shows help
----@param params { buf: integer, context: GrugFarContext }
+---@param params { buf: integer, context: grug.far.Context }
 local function help(params)
   local context = params.context
 

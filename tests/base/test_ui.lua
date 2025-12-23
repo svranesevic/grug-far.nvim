@@ -1,5 +1,6 @@
 local MiniTest = require('mini.test')
 local helpers = require('grug-far.test.helpers')
+local keymaps = helpers.getKeymaps()
 
 ---@type NeovimChild
 local child = MiniTest.new_child_neovim()
@@ -49,14 +50,6 @@ T['can launch with :GrugFar ripgrep'] = function()
   helpers.childWaitForScreenshotText(child, 'ripgrep')
 end
 
-T['can launch with deprecated grug_far api'] = function()
-  child.lua_get('GrugFar.grug_far(...)', {
-    {},
-  })
-  helpers.childWaitForScreenshotText(child, 'ripgrep')
-  helpers.childExpectScreenshot(child)
-end
-
 T['can search manually on insert leave or normal mode change'] = function()
   helpers.writeTestFiles({
     { filename = 'file1', content = [[ grug walks ]] },
@@ -75,7 +68,7 @@ T['can search manually on insert leave or normal mode change'] = function()
 
   helpers.childWaitForScreenshotText(child, 'Search:')
   child.type_keys('<esc>cc', 'walks')
-  vim.uv.sleep(100)
+  helpers.sleep(child, 100)
   helpers.childExpectScreenshot(child)
 
   child.type_keys('<esc>')
@@ -231,6 +224,248 @@ T['o on last line of input does not break into next input'] = function()
   })
   helpers.childWaitForScreenshotText(child, 'Search:')
   child.type_keys('<esc>jo')
+  helpers.childExpectScreenshot(child)
+end
+
+T['can change border style for help window'] = function()
+  helpers.childRunGrugFar(child, {
+    helpWindow = {
+      border = 'none',
+    },
+  })
+  child.type_keys('<esc>g?')
+  helpers.childExpectScreenshot(child)
+end
+
+T['can change border style for history window'] = function()
+  helpers.writeTestFiles({
+    { filename = 'file1.txt', content = [[ grug walks ]] },
+    {
+      filename = 'file2.doc',
+      content = [[
+      grug talks and grug drinks
+      then grug thinks and talks
+    ]],
+    },
+  })
+
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug', flags = '-i' },
+    historyWindow = {
+      border = 'solid',
+    },
+  })
+  helpers.childWaitForFinishedStatus(child)
+  child.type_keys('<esc>' .. keymaps.historyAdd.n)
+  helpers.childWaitForScreenshotText(child, 'grug-far: added current search to history')
+
+  child.type_keys('<esc>' .. keymaps.historyOpen.n)
+  helpers.childWaitForScreenshotText(child, 'History')
+  helpers.childExpectScreenshot(child)
+end
+
+T['can change border style for preview window'] = function()
+  helpers.writeTestFiles({
+    { filename = 'file1.txt', content = [[ 
+       grug walks
+       then grug swims
+      ]] },
+    {
+      filename = 'file2.doc',
+      content = [[ 
+      grug talks and grug drinks
+      then grug thinks
+    ]],
+    },
+  })
+
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug' },
+    previewWindow = {
+      border = 'double',
+    },
+  })
+  helpers.childWaitForFinishedStatus(child)
+
+  child.type_keys('<esc>8G')
+  child.type_keys('<esc>' .. keymaps.previewLocation.n)
+  helpers.childExpectScreenshot(child)
+end
+
+T['can conceal long lines'] = function()
+  helpers.writeTestFiles({
+    { filename = 'file1', content = [[ grug walks ]] },
+    {
+      filename = 'file2_this_is_indeed_a_file_with_a_very_long_name_my_friends_and_i_reconize_that_it_is_quite_long_indeed',
+      content = [[ 
+      grug talks and grug drinks
+      then grug thinks
+    ]],
+    },
+  })
+
+  helpers.childRunGrugFar(child, {
+    wrap = false,
+    prefills = {
+      search = 'grug',
+    },
+  })
+  helpers.childWaitForFinishedStatus(child)
+  helpers.childExpectScreenshot(child)
+end
+
+T['can fold at filename'] = function()
+  helpers.writeTestFiles({
+    { filename = 'file1.txt', content = [[ grug walks ]] },
+    {
+      filename = 'file2.lua',
+      content = [[ 
+      grug talks and grug drinks
+      then grug thinks
+    ]],
+    },
+  })
+
+  helpers.childRunGrugFar(child, {
+    prefills = {
+      search = 'grug',
+    },
+    folding = {
+      enabled = true,
+      include_file_path = true,
+    },
+  })
+  helpers.childWaitForFinishedStatus(child)
+  helpers.childWaitForScreenshotText(child, '4 matches in 2 files')
+  child.type_keys(10, '<esc>:11<cr>', 'zc')
+  helpers.childExpectScreenshot(child)
+end
+
+T['can display correctly with showCompactInputs=true'] = function()
+  helpers.childRunGrugFar(child, {
+    showCompactInputs = true,
+  })
+  helpers.childWaitForScreenshotText(child, 'READY')
+  helpers.childExpectScreenshot(child)
+end
+
+T['can display correctly with showInputsTopPadding=false'] = function()
+  helpers.childRunGrugFar(child, {
+    showInputsTopPadding = false,
+  })
+  helpers.childWaitForScreenshotText(child, 'READY')
+  helpers.childExpectScreenshot(child)
+end
+
+T['can display correctly with showInputsBottomPadding=false'] = function()
+  helpers.childRunGrugFar(child, {
+    showInputsBottomPadding = false,
+  })
+  helpers.childWaitForScreenshotText(child, 'READY')
+  helpers.childExpectScreenshot(child)
+end
+
+T['can display correctly with showStatusInfo=false'] = function()
+  helpers.writeTestFiles({
+    { filename = 'file1', content = [[ grug walks ]] },
+  })
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug' },
+    showStatusInfo = false,
+  })
+  helpers.childWaitForFinishedStatus(child)
+  helpers.childExpectScreenshot(child)
+end
+
+T['can display correctly with showEngineInfo=false'] = function()
+  helpers.childRunGrugFar(child, {
+    showEngineInfo = false,
+  })
+  helpers.childWaitForScreenshotText(child, 'READY')
+  helpers.childExpectScreenshot(child)
+end
+
+T['can display correctly with showStatusIcon=false'] = function()
+  helpers.childRunGrugFar(child, {
+    showStatusIcon = false,
+  })
+  helpers.childWaitForScreenshotText(child, 'Search')
+  helpers.childExpectScreenshot(child)
+end
+
+T['can backspace newlines with backspaceEol enabled'] = function()
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug\nwalks' },
+    backspaceEol = true,
+  })
+  child.type_keys('<esc>', 'j', 'I', '<bs>')
+  helpers.childExpectScreenshot(child)
+end
+
+T['deleting with bs from start of input is ignored even with backspaceEol'] = function()
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug', replacement = 'walks' },
+    backspaceEol = true,
+  })
+
+  child.type_keys('<esc>', 'j', 'I', '<bs>')
+  helpers.childExpectScreenshot(child)
+end
+
+T['deleting with C-u from start of input is ignored even with backspaceEol'] = function()
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug', replacement = 'walks' },
+    backspaceEol = true,
+  })
+
+  child.type_keys('<esc>', 'j', 'I', '<C-u>')
+  helpers.childExpectScreenshot(child)
+end
+
+T['deleting with C-w from start of input is ignored even with backspaceEol'] = function()
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug', replacement = 'walks' },
+    backspaceEol = true,
+  })
+
+  child.type_keys('<esc>', 'j', 'I', '<C-w>')
+  helpers.childExpectScreenshot(child)
+end
+
+T['deleting from end of input is ignored even with backspaceEol'] = function()
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug', replacement = 'walks' },
+    backspaceEol = true,
+  })
+  child.type_keys('<esc>', 'A', '<del>')
+  helpers.childExpectScreenshot(child)
+end
+
+T['deleting from end of multiline input is ignored even with backspaceEol'] = function()
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug\nwalks', replacement = 'grug walks' },
+    backspaceEol = true,
+  })
+  child.type_keys('<esc>', 'j', 'A', '<del>')
+  helpers.childExpectScreenshot(child)
+end
+
+T['respects default input value on load'] = function()
+  helpers.writeTestFiles({})
+  helpers.childRunGrugFar(child, {
+    prefills = {
+      search = 'grug',
+    },
+    engines = {
+      ripgrep = {
+        defaults = {
+          search = 'hello',
+          flags = '--smart-case',
+        },
+      },
+    },
+  })
+  helpers.childWaitForFinishedStatus(child)
   helpers.childExpectScreenshot(child)
 end
 

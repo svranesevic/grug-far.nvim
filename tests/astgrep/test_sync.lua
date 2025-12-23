@@ -41,12 +41,12 @@ T['sync all is not supported'] = function()
   })
   helpers.childWaitForFinishedStatus(child)
 
-  child.type_keys(10, '<esc>9G', 'dd')
+  child.type_keys(10, '<esc>7G', 'dd')
   child.type_keys(10, 'A', ' a deep depth indeed!')
 
   child.type_keys('<esc>' .. keymaps.syncLocations.n)
 
-  helpers.childWaitForUIVirtualText(child, 'sync operation not suppored')
+  helpers.childWaitForUIVirtualText(child, 'sync operation not supported')
 end
 
 T['sync line is not supported'] = function()
@@ -75,12 +75,12 @@ T['sync line is not supported'] = function()
   })
   helpers.childWaitForFinishedStatus(child)
 
-  child.type_keys(10, '<esc>9G', 'dd')
+  child.type_keys(10, '<esc>7G', 'dd')
   child.type_keys(10, 'A', ' a deep depth indeed!')
 
   child.type_keys('<esc>' .. keymaps.syncLine.n)
 
-  helpers.childWaitForUIVirtualText(child, 'sync operation not suppored')
+  helpers.childWaitForUIVirtualText(child, 'sync operation not supported')
 end
 
 return T

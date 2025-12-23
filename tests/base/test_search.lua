@@ -240,6 +240,29 @@ T['can search with replace string'] = function()
   helpers.childExpectBufLines(child)
 end
 
+-- NOTE: this checks that the match_separator in getResultsWithReplaceDiff() replacement logic works correctly
+T['can search with replace string, with dotall'] = function()
+  helpers.writeTestFiles({
+    { filename = 'file1', content = [[ grug walks ]] },
+    {
+      filename = 'file2',
+      content = [[ 
+      grug talks and grug drinks
+      then grug thinks
+    ]],
+    },
+  })
+
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug(.*)', replacement = 'curly$1' },
+  })
+
+  helpers.childWaitForFinishedStatus(child)
+
+  helpers.childExpectScreenshot(child)
+  helpers.childExpectBufLines(child)
+end
+
 T['can search with empty replace string'] = function()
   helpers.writeTestFiles({
     { filename = 'file1.txt', content = [[ grug walks ]] },
@@ -421,6 +444,227 @@ T['searches first line of multiline visual selection'] = function()
   helpers.childWaitForFinishedStatus(child)
 
   helpers.childExpectScreenshot(child)
+end
+
+T['can trim long lines during search'] = function()
+  helpers.writeTestFiles({
+    {
+      filename = 'file1.txt',
+      content = [[grug walks a distance that is exactly 56 characters long]],
+    },
+    {
+      filename = 'file2.doc',
+      content = [[ 
+      grug talks and grug drinks
+      then grug thinks
+    ]],
+    },
+  })
+
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug' },
+    maxLineLength = 30,
+  })
+
+  helpers.childWaitForFinishedStatus(child)
+  helpers.childExpectScreenshot(child)
+  helpers.childExpectBufLines(child)
+end
+
+T['respects disabled maxLineLength'] = function()
+  helpers.writeTestFiles({
+    {
+      filename = 'file1.txt',
+      content = [[grug walks a distance that is exactly 56 characters long]],
+    },
+    {
+      filename = 'file2.doc',
+      content = [[ 
+      grug talks and grug drinks
+      then grug thinks
+    ]],
+    },
+  })
+
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug' },
+    maxLineLength = -1,
+  })
+
+  helpers.childWaitForFinishedStatus(child)
+  helpers.childExpectScreenshot(child)
+  helpers.childExpectBufLines(child)
+end
+
+T['can search within full line range'] = function()
+  helpers.writeTestFiles({
+    {
+      filename = 'file1.txt',
+      content = [[ 
+      grug talks and grug drinks
+      then grug thinks
+      and grug is confused!
+    ]],
+    },
+  })
+
+  helpers.cdTempTestDir(child)
+  child.cmd('e file1.txt')
+  child.type_keys(10, 'ggjVj')
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug' },
+    visualSelectionUsage = 'operate-within-range',
+  })
+
+  helpers.childWaitForFinishedStatus(child)
+  helpers.childExpectScreenshot(child)
+end
+
+T['can search within partial line range'] = function()
+  helpers.writeTestFiles({
+    {
+      filename = 'file1.txt',
+      content = [[ 
+      grug talks and grug drinks
+      then grug thinks
+      and grug is confused!
+    ]],
+    },
+  })
+
+  helpers.cdTempTestDir(child)
+  child.cmd('e file1.txt')
+  child.type_keys(10, 'ggjwwvj$')
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug' },
+    visualSelectionUsage = 'operate-within-range',
+  })
+
+  helpers.childWaitForFinishedStatus(child)
+  helpers.childExpectScreenshot(child)
+end
+
+T['will error out on bad buffer-range'] = function()
+  helpers.writeTestFiles({
+    {
+      filename = 'file1.txt',
+      content = [[ 
+      grug talks and grug drinks
+      then grug thinks
+      and grug is confused!
+    ]],
+    },
+  })
+
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug', paths = 'buffer-range=bad_one' },
+  })
+
+  helpers.childWaitForFinishedStatus(child)
+  helpers.childExpectScreenshot(child)
+end
+
+T['can search for some string in <buflist>'] = function()
+  helpers.writeTestFiles({
+    { filename = 'file1', content = [[ grug walks ]] },
+    { filename = 'file2', content = [[ grug talks ]] },
+    { filename = 'file3', content = [[ grug drinks ]] },
+    { filename = 'file4', content = [[ grug thinks ]] },
+  })
+
+  helpers.cdTempTestDir(child)
+  child.cmd('edit file1')
+  helpers.sleep(child, 20)
+  child.cmd('edit file2')
+  helpers.sleep(child, 20)
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug', paths = '<buflist>' },
+  })
+
+  helpers.childWaitForScreenshotText(child, '2 matches in 2 files')
+  helpers.childWaitForFinishedStatus(child)
+
+  helpers.childExpectScreenshot(child)
+  helpers.childExpectBufLines(child)
+end
+
+T['can search for some string in <buflist-cwd>'] = function()
+  helpers.writeTestFiles({
+    { filename = 'file1', content = [[ grug walks ]] },
+    { filename = 'file2', content = [[ grug talks ]] },
+    { filename = 'file3', content = [[ grug drinks ]] },
+    { filename = 'file4', content = [[ grug thinks ]] },
+  })
+
+  helpers.cdTempTestDir(child)
+  child.cmd('edit file1')
+  helpers.sleep(child, 20)
+  child.cmd('edit file2')
+  helpers.sleep(child, 20)
+  child.cmd('edit ../README.md')
+  helpers.sleep(child, 20)
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug', paths = '<buflist-cwd>' },
+  })
+
+  helpers.childWaitForScreenshotText(child, '2 matches in 2 files')
+  helpers.childWaitForFinishedStatus(child)
+
+  helpers.childExpectScreenshot(child)
+  helpers.childExpectBufLines(child)
+end
+
+T['can search for some string in <qflist>'] = function()
+  helpers.writeTestFiles({
+    { filename = 'file1', content = [[ grug walks ]] },
+    { filename = 'file2', content = [[ grug talks ]] },
+    { filename = 'file3', content = [[ grug drinks ]] },
+    { filename = 'file4', content = [[ grug thinks ]] },
+  })
+
+  helpers.cdTempTestDir(child)
+  child.lua([[
+    vim.fn.setqflist({
+      { filename = 'file1', lnum = 1 },
+      { filename = 'file3', lnum = 1 }
+    })
+  ]])
+  child.cmd('copen')
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug', paths = '<qflist>' },
+  })
+
+  helpers.childWaitForScreenshotText(child, '2 matches in 2 files')
+  helpers.childWaitForFinishedStatus(child)
+
+  helpers.childExpectScreenshot(child)
+  helpers.childExpectBufLines(child)
+end
+
+T['can search for some string in <loclist>'] = function()
+  helpers.writeTestFiles({
+    { filename = 'file1', content = [[ grug walks ]] },
+    { filename = 'file2', content = [[ grug talks ]] },
+    { filename = 'file3', content = [[ grug drinks ]] },
+    { filename = 'file4', content = [[ grug thinks ]] },
+  })
+
+  helpers.cdTempTestDir(child)
+  child.lua([[
+    vim.fn.setloclist(0, {
+      { filename = 'file2', lnum = 1 },
+      { filename = 'file4', lnum = 1 }
+    })
+  ]])
+  helpers.childRunGrugFar(child, {
+    prefills = { search = 'grug', paths = '<loclist>' },
+  })
+
+  helpers.childWaitForScreenshotText(child, '2 matches in 2 files')
+  helpers.childWaitForFinishedStatus(child)
+
+  helpers.childExpectScreenshot(child)
+  helpers.childExpectBufLines(child)
 end
 
 return T

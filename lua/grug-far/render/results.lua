@@ -2,7 +2,7 @@ local renderResultsHeader = require('grug-far.render.resultsHeader')
 
 --- ensure a minimum line number so that we don't overlap inputs
 ---@param buf integer
----@param context GrugFarContext
+---@param context grug.far.Context
 ---@param initialMinLineNr integer
 ---@param prevExtmarkName string
 ---@return integer headerRow
@@ -64,14 +64,14 @@ local function ensureMinLineNr(buf, context, initialMinLineNr, prevExtmarkName)
 end
 
 ---@param params { buf: integer, minLineNr: integer, prevLabelExtmarkName: string }
----@param context GrugFarContext
+---@param context grug.far.Context
 local function renderResults(params, context)
   local buf = params.buf
   local minLineNr = params.minLineNr
 
-  context.state.headerRow = ensureMinLineNr(buf, context, minLineNr, params.prevLabelExtmarkName)
+  local headerRow = ensureMinLineNr(buf, context, minLineNr, params.prevLabelExtmarkName)
 
-  renderResultsHeader(buf, context)
+  renderResultsHeader(buf, context, headerRow)
 end
 
 return renderResults

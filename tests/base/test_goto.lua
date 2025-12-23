@@ -31,12 +31,11 @@ T['can goto given location'] = function()
   })
 
   helpers.childRunGrugFar(child, {
-    windowCreationCommand = 'vsplit',
     prefills = { search = 'grug' },
   })
   helpers.childWaitForFinishedStatus(child)
 
-  child.type_keys('<esc>10G')
+  child.type_keys('<esc>8G0')
   child.type_keys('<esc>' .. keymaps.gotoLocation.n)
   helpers.childWaitForScreenshotText(child, '3,13')
   helpers.childExpectScreenshot(child)
@@ -58,7 +57,6 @@ T['can goto given location with count'] = function()
   })
 
   helpers.childRunGrugFar(child, {
-    windowCreationCommand = 'vsplit',
     prefills = { search = 'grug' },
   })
   helpers.childWaitForFinishedStatus(child)
@@ -88,7 +86,7 @@ T['can goto given location when only window in tabpage'] = function()
   })
   helpers.childWaitForFinishedStatus(child)
 
-  child.type_keys('<esc>10G')
+  child.type_keys('<esc>8G0')
   child.type_keys('<esc>' .. keymaps.gotoLocation.n)
   helpers.childWaitForScreenshotText(child, '3,13')
   helpers.childExpectScreenshot(child)

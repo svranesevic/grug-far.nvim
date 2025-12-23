@@ -1,5 +1,13 @@
 # Contributing
 
+## Pre-Commit
+
+Install pre-commit as per https://pre-commit.com (might be possible through your package manager)
+Run :
+```bash
+$ pre-commit install
+```
+
 ## Linting
 
 You'll need to install [stylua][stylua] and [selene][selene].
@@ -23,6 +31,7 @@ To run all tests just execute
 ```bash
 $ make test
 ```
+Please follow instructions to get right version of dependencies such as ripgrep and astgrep.
 
 To run specific test:
 ```bash

@@ -1,7 +1,7 @@
 local utils = require('grug-far.utils')
 
 --- performs sync for given changed file
----@param params { changedFile: ChangedFile, on_done: fun(errorMessage: string?) }
+---@param params { changedFile: grug.far.ChangedFile, on_done: fun(errorMessage: string?) }
 local function writeChangedFile(params)
   local changedFile = params.changedFile
   local on_done = params.on_done
@@ -12,7 +12,8 @@ local function writeChangedFile(params)
       return on_done('Could not read: ' .. file .. '\n' .. err1)
     end
 
-    local lines = vim.split(contents or '', utils.eol)
+    local eol = utils.detect_eol(contents or '')
+    local lines = vim.split(contents or '', eol)
 
     local changedLines = changedFile.changedLines
     for i = 1, #changedLines do
@@ -30,7 +31,7 @@ local function writeChangedFile(params)
       lines[lnum] = changedLine.newLine
     end
 
-    local newContents = table.concat(lines, utils.eol)
+    local newContents = table.concat(lines, eol)
     utils.overwriteFileAsync(file, newContents, function(err2)
       if err2 then
         return on_done('Could not write: ' .. file .. '\n' .. err2)
@@ -41,14 +42,13 @@ local function writeChangedFile(params)
   end)
 end
 
----@class SyncChangedFilesParams
----@field options GrugFarOptions
----@field changedFiles ChangedFile[]
----@field report_progress fun(count: integer)
----@field on_finish fun(status: GrugFarStatus, errorMessage: string | nil)
-
 --- sync given changed files
----@param params SyncChangedFilesParams
+---@param params {
+--- options: grug.far.Options,
+--- changedFiles: grug.far.ChangedFile[],
+--- report_progress: fun(count: integer),
+--- on_finish: fun(status: grug.far.Status, errorMessage: string | nil),
+---}
 ---@return fun() abort
 local function syncChangedFiles(params)
   local changedFiles = vim.deepcopy(params.changedFiles)

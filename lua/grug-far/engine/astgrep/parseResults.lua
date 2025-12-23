@@ -1,110 +1,104 @@
 local utils = require('grug-far.utils')
 local engine = require('grug-far.engine')
 local ResultHighlightType = engine.ResultHighlightType
+local ResultMarkType = engine.ResultMarkType
+local ResultSigns = engine.ResultSigns
+local ResultHighlightByType = engine.ResultHighlightByType
 
 local M = {}
 
----@type ResultHighlightSign
-local change_sign = { icon = 'resultsChangeIndicator', hl = 'GrugFarResultsChangeIndicator' }
----@type ResultHighlightSign
-local removed_sign = { icon = 'resultsRemovedIndicator', hl = 'GrugFarResultsRemoveIndicator' }
----@type ResultHighlightSign
-local added_sign = { icon = 'resultsAddedIndicator', hl = 'GrugFarResultsAddIndicator' }
----@type ResultHighlightSign
-local separator_sign =
-  { icon = 'resultsDiffSeparatorIndicator', hl = 'GrugFarResultsDiffSeparatorIndicator' }
-
-local HighlightByType = {
-  [ResultHighlightType.LineNumber] = 'GrugFarResultsLineNo',
-  [ResultHighlightType.ColumnNumber] = 'GrugFarResultsLineColumn',
-  [ResultHighlightType.FilePath] = 'GrugFarResultsPath',
-  [ResultHighlightType.Match] = 'GrugFarResultsMatch',
-  [ResultHighlightType.MatchAdded] = 'GrugFarResultsMatchAdded',
-  [ResultHighlightType.MatchRemoved] = 'GrugFarResultsMatchRemoved',
-  [ResultHighlightType.DiffSeparator] = 'Normal',
-}
-
----@class AstgrepMatchPos
+---@class grug.far.AstgrepMatchPos
 ---@field line integer
 ---@field column integer
 
----@class AstgrepMatchByteOffset
+---@class grug.far.AstgrepMatchByteOffset
 ---@field start integer
 ---@field end integer
 
----@class AstgrepMatchRange
----@field start AstgrepMatchPos
----@field end AstgrepMatchPos
----@field byteOffset AstgrepMatchByteOffset
+---@class grug.far.AstgrepMatchRange
+---@field start grug.far.AstgrepMatchPos
+---@field end grug.far.AstgrepMatchPos
+---@field byteOffset grug.far.AstgrepMatchByteOffset
 
----@class AstgrepMatchCharCount
+---@class grug.far.AstgrepMatchCharCount
 ---@field leading integer
 ---@field trailing integer
 
----@class AstgrepMatch
+---@class grug.far.AstgrepMatch
 ---@field file string
 ---@field lines string
 ---@field text string
 ---@field replacement string
----@field range AstgrepMatchRange
----@field charCount? AstgrepMatchCharCount
+---@field range grug.far.AstgrepMatchRange
+---@field charCount? grug.far.AstgrepMatchCharCount
 
 --- adds result lines
+---@param file_name string? associated file
 ---@param resultLines string[] lines to add
----@param range AstgrepMatchRange
+---@param range grug.far.AstgrepMatchRange
 ---@param lines string[] lines table to add to
----@param highlights ResultHighlight[] highlights table to add to
----@param lineNumberSign? ResultHighlightSign
+---@param highlights grug.far.ResultHighlight[] highlights table to add to
+---@param marks grug.far.ResultMark[] marks to add to
+---@param sign? grug.far.ResultHighlightSign
 ---@param matchHighlightType? ResultHighlightType
+---@param bufrange? grug.far.VisualSelectionInfo
+---@param mark_opts? any
 local function addResultLines(
+  file_name,
   resultLines,
   range,
   lines,
   highlights,
-  lineNumberSign,
-  matchHighlightType
+  marks,
+  sign,
+  matchHighlightType,
+  bufrange,
+  mark_opts
 )
   local numlines = #lines
   for j, resultLine in ipairs(resultLines) do
     local current_line = numlines + j - 1
     local isLastLine = j == #resultLines
-    local line_no = tostring(range.start.line + j)
-    local col_no = range.start.column and tostring(range.start.column + 1) or nil
-    local prefix = string.format('%-7s', line_no .. (col_no and ':' .. col_no .. ':' or '-'))
+    local lnum = bufrange and bufrange.start_row - 1 + range.start.line + j or range.start.line + j
+    local column_number = range.start.column and range.start.column + 1 or nil
+    if bufrange and bufrange.start_col and column_number then
+      column_number = column_number + bufrange.start_col
+      bufrange.start_col = nil -- we only want to add col to first line
+    end
+    resultLine = utils.getLineWithoutCarriageReturn(resultLine)
 
-    table.insert(highlights, {
-      hl_type = ResultHighlightType.LineNumber,
-      hl = HighlightByType[ResultHighlightType.LineNumber],
+    local mark = {
+      type = ResultMarkType.SourceLocation,
       start_line = current_line,
       start_col = 0,
       end_line = current_line,
-      end_col = #line_no,
-      sign = lineNumberSign,
-    })
-    if col_no then
-      table.insert(highlights, {
-        hl_type = ResultHighlightType.ColumnNumber,
-        hl = HighlightByType[ResultHighlightType.ColumnNumber],
-        start_line = current_line,
-        start_col = #line_no + 1, -- skip ':'
-        end_line = current_line,
-        end_col = #line_no + 1 + #col_no,
-      })
+      end_col = #resultLine,
+      location = {
+        filename = file_name,
+        lnum = lnum,
+        col = column_number,
+        text = resultLine,
+      },
+      sign = sign,
+    }
+    if mark_opts then
+      for key, value in pairs(mark_opts) do
+        mark[key] = value
+      end
     end
+    table.insert(marks, mark)
 
-    resultLine = prefix .. resultLine
     if matchHighlightType then
       table.insert(highlights, {
-        hl_type = matchHighlightType,
-        hl = HighlightByType[matchHighlightType],
+        hl_group = ResultHighlightByType[matchHighlightType],
         start_line = current_line,
-        start_col = j == 1 and #prefix + range.start.column or #prefix,
+        start_col = j == 1 and range.start.column or 0,
         end_line = current_line,
-        end_col = isLastLine and #prefix + range['end'].column or #resultLine,
+        end_col = isLastLine and range['end'].column or #resultLine,
       })
     end
 
-    table.insert(lines, utils.getLineWithoutCarriageReturn(resultLine))
+    table.insert(lines, resultLine)
   end
 end
 
@@ -128,33 +122,43 @@ function M.splitMatchLines(lines, leading, trailing)
 end
 
 --- parse results data and get info
----@param matches AstgrepMatch[]
----@return ParsedResultsData
-function M.parseResults(matches)
+---@param matches grug.far.AstgrepMatch[]
+---@param bufrange grug.far.VisualSelectionInfo?
+---@param isFirst boolean
+---@return grug.far.ParsedResultsData
+function M.parseResults(matches, bufrange, isFirst)
+  ---@type grug.far.ParsedResultsStats
   local stats = { files = 0, matches = 0 }
+  ---@type string[]
   local lines = {}
+  ---@type grug.far.ResultHighlight[]
   local highlights = {}
+  ---@type grug.far.ResultMark[]
+  local marks = {}
 
+  local is_first_one = isFirst
+  local file_name = nil
   for i = 1, #matches, 1 do
     local match = matches[i]
     stats.matches = stats.matches + 1
     local isFileBoundary = i == 1 or match.file ~= matches[i - 1].file
 
-    if isFileBoundary and i > 1 then
+    if isFileBoundary and not is_first_one then
       table.insert(lines, '')
     end
+    is_first_one = false
 
     if isFileBoundary then
       stats.files = stats.files + 1
+      file_name = bufrange and bufrange.file_name or vim.fs.normalize(match.file)
       table.insert(highlights, {
-        hl_type = ResultHighlightType.FilePath,
-        hl = HighlightByType[ResultHighlightType.FilePath],
+        hl_group = ResultHighlightByType[ResultHighlightType.FilePath],
         start_line = #lines,
         start_col = 0,
         end_line = #lines,
-        end_col = #match.file,
+        end_col = #file_name,
       })
-      table.insert(lines, match.file)
+      table.insert(lines, file_name)
     end
 
     local leading = match.charCount and match.charCount.leading or match.range.start.column
@@ -170,15 +174,38 @@ function M.parseResults(matches)
       local leadingRange = vim.deepcopy(match.range)
       leadingRange.start.column = nil
       leadingRange.start.line = match.range.start.line - #leadingLines
-      addResultLines(leadingLines, leadingRange, lines, highlights, change_sign)
+      addResultLines(
+        file_name,
+        leadingLines,
+        leadingRange,
+        lines,
+        highlights,
+        marks,
+        match.replacement and ResultSigns.Changed or nil,
+        nil,
+        bufrange,
+        { is_context = true }
+      )
     end
 
     -- add match lines
-    local lineNumberSign = match.replacement and removed_sign or change_sign
+    local lineNumberSign = match.replacement and ResultSigns.Removed or nil
     local matchHighlightType = match.replacement and ResultHighlightType.MatchRemoved
       or ResultHighlightType.Match
     local matchLines = vim.split(matchLinesStr, '\n')
-    addResultLines(matchLines, match.range, lines, highlights, lineNumberSign, matchHighlightType)
+    local next_mark_index = #marks + 1
+    addResultLines(
+      file_name,
+      matchLines,
+      match.range,
+      lines,
+      highlights,
+      marks,
+      lineNumberSign,
+      matchHighlightType,
+      bufrange
+    )
+    marks[next_mark_index].location.is_counted = true
 
     -- add replacements lines
     if match.replacement then
@@ -192,12 +219,15 @@ function M.parseResults(matches)
       local replaceRange = vim.deepcopy(match.range)
       replaceRange['end'].column = #replacedLines[#replacedLines] - #postfix
       addResultLines(
+        file_name,
         replacedLines,
         replaceRange,
         lines,
         highlights,
-        added_sign,
-        ResultHighlightType.MatchAdded
+        marks,
+        ResultSigns.Added,
+        ResultHighlightType.MatchAdded,
+        bufrange
       )
     end
 
@@ -207,7 +237,18 @@ function M.parseResults(matches)
       local trailingRange = vim.deepcopy(match.range)
       trailingRange.start.column = nil
       trailingRange.start.line = match.range['end'].line + 1
-      addResultLines(trailingLines, trailingRange, lines, highlights, change_sign)
+      addResultLines(
+        file_name,
+        trailingLines,
+        trailingRange,
+        lines,
+        highlights,
+        marks,
+        match.replacement and ResultSigns.Changed or nil,
+        nil,
+        bufrange,
+        { is_context = true }
+      )
     end
 
     -- add separator
@@ -216,32 +257,31 @@ function M.parseResults(matches)
       and i ~= #matches
       and match.file == matches[i + 1].file
     then
-      table.insert(highlights, {
-        hl_type = ResultHighlightType.DiffSeparator,
-        hl = HighlightByType[ResultHighlightType.DiffSeparator],
+      table.insert(marks, {
+        type = ResultMarkType.DiffSeparator,
         start_line = #lines,
-        start_col = 1,
+        start_col = 0,
         end_line = #lines,
-        end_col = 1,
-        sign = separator_sign,
+        end_col = 0,
+        sign = match.replacement and ResultSigns.DiffSeparator or nil,
+        location = {
+          filename = file_name,
+        },
       })
       table.insert(lines, engine.DiffSeparatorChars)
-    end
-
-    if i == #matches then
-      table.insert(lines, '')
     end
   end
 
   return {
     lines = lines,
     highlights = highlights,
+    marks = marks,
     stats = stats,
   }
 end
 
 --- decodes streamed json matches, appending to given table
----@param matches AstgrepMatch[]
+---@param matches grug.far.AstgrepMatch[]
 ---@param data string
 ---@param eval_fn? fun(...): (string?, string?)
 ---@return string? err
@@ -250,19 +290,24 @@ function M.json_decode_matches(matches, data, eval_fn)
   local json_lines = vim.split(data, '\n')
   for _, json_line in ipairs(json_lines) do
     if #json_line > 0 then
-      local match = vim.json.decode(json_line)
+      local success, match = pcall(vim.json.decode, json_line)
+      if not success then
+        return '__json_decode_error__'
+      end
       if eval_fn then
         local vars = {}
-        for name, value in pairs(match.metaVariables.single) do
-          vars[name] = value.text
-        end
-        for name, value in pairs(match.metaVariables.multi) do
-          vars[name] = vim
-            .iter(value)
-            :map(function(v)
-              return v.text
-            end)
-            :totable()
+        if match.metaVariables then
+          for name, value in pairs(match.metaVariables.single) do
+            vars[name] = value.text
+          end
+          for name, value in pairs(match.metaVariables.multi) do
+            vars[name] = vim
+              .iter(value)
+              :map(function(v)
+                return v.text
+              end)
+              :totable()
+          end
         end
         local replacementText, err = eval_fn(match.text, vars)
         if err then
@@ -279,8 +324,8 @@ function M.json_decode_matches(matches, data, eval_fn)
 end
 
 --- splits off matches corresponding to the last file
----@param matches AstgrepMatch[]
----@return AstgrepMatch[] before, AstgrepMatch[] after
+---@param matches grug.far.AstgrepMatch[]
+---@return grug.far.AstgrepMatch[] before, grug.far.AstgrepMatch[] after
 function M.split_last_file_matches(matches)
   local end_index = 0
   for i = #matches - 1, 1, -1 do
@@ -303,8 +348,8 @@ function M.split_last_file_matches(matches)
 end
 
 --- splits off matches corresponding to each file
----@param matches AstgrepMatch[]
----@return AstgrepMatch[][] matches_per_file
+---@param matches grug.far.AstgrepMatch[]
+---@return grug.far.AstgrepMatch[][] matches_per_file
 function M.split_matches_per_file(matches)
   if #matches == 0 then
     return {}
@@ -324,7 +369,7 @@ end
 
 --- constructs new file content, given old file content and matches with replacements
 ---@param contents string
----@param matches AstgrepMatch[]
+---@param matches grug.far.AstgrepMatch[]
 ---@return string new_contents
 function M.getReplacedContents(contents, matches)
   local new_contents = ''

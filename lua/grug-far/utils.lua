@@ -1,6 +1,7 @@
 local uv = vim.uv
-local is_win = vim.api.nvim_call_function('has', { 'win32' }) == 1
 local M = {}
+
+M.is_win = vim.api.nvim_call_function('has', { 'win32' }) == 1
 
 ---@type number?
 M.scratch_buf = nil
@@ -13,7 +14,7 @@ function M.buf_set_name(bufnr, name)
   vim.api.nvim_buf_set_name(bufnr, name)
   if old_name ~= '' then
     local new_buf = vim.api.nvim_buf_call(bufnr, function()
-      return vim.fn.bufnr('#')
+      return vim.fn.bufnr '#'
     end)
     if new_buf ~= bufnr and new_buf ~= -1 and vim.api.nvim_buf_get_name(new_buf) == old_name then
       pcall(vim.api.nvim_buf_delete, new_buf, { force = true })
@@ -40,7 +41,7 @@ function M.getFileType(filename)
   if not (M.scratch_buf and vim.api.nvim_buf_is_valid(M.scratch_buf)) then
     M.scratch_buf = vim.api.nvim_create_buf(false, true)
   end
-  return vim.filetype.match({ filename = filename, buf = M.scratch_buf })
+  return vim.filetype.match { filename = filename, buf = M.scratch_buf }
 end
 
 --- clear the timeout
@@ -82,27 +83,19 @@ function M.throttle(callback, ms)
   end
 end
 
---- finds last location of given substring in string
+--- finds last location of given substring in string (1-based index)
+--- note: this does not handle utf-8, but neither does lua string.find, so
+--- this is the best we can do atm
 ---@param str string
 ---@param substr string
----@return integer | nil, integer | nil
+---@return integer | nil
 function M.strFindLast(str, substr)
-  local i = 0
-  local j = nil
-  while true do
-    local i2, j2 = string.find(str, substr, i + 1, true)
-    if i2 == nil then
-      break
-    end
-    i = i2
-    j = j2
+  local pos = vim.fn.strridx(str, substr)
+  if pos == -1 then
+    return nil
   end
 
-  if j == nil then
-    return nil, nil
-  end
-
-  return i, j
+  return pos + 1
 end
 
 --- splits off last line in string
@@ -185,6 +178,21 @@ function M.readFileAsync(path, callback)
       end)
     end)
   end)
+end
+
+--- reads file lines synchronously
+---@param path string file path
+---@return string[] | nil
+function M.readFileLinesSync(path)
+  local fd = uv.fs_open(path, 'r', 0)
+  if not fd then
+    return
+  end
+  local stat = assert(uv.fs_fstat(fd))
+  local data = assert(uv.fs_read(fd, stat.size, 0)) --[[@as string]]
+  assert(uv.fs_close(fd))
+
+  return vim.iter(vim.split(data, '\n')):map(M.getLineWithoutCarriageReturn):totable()
 end
 
 --- async overwrites file with given content
@@ -271,7 +279,7 @@ end
 --- leave visual mode if in visual mode
 ---@return boolean if left visual mode
 function M.leaveVisualMode()
-  local isVisualMode = vim.fn.mode():lower():find('v') ~= nil
+  local isVisualMode = vim.fn.mode():lower():find 'v' ~= nil
   if isVisualMode then
     -- needed to make visual selection work
     vim.fn.feedkeys(':', 'nx')
@@ -280,35 +288,34 @@ function M.leaveVisualMode()
 end
 
 --- get text lines in visual selection
----@return string[]
+--- range row are 1-based, col are 0-based
+---@return string[] lines, integer start_row, integer start_col, integer end_row, integer end_col
 function M.getVisualSelectionLines()
   local start_row, start_col = unpack(vim.api.nvim_buf_get_mark(0, '<'))
-  local end_row, end_col = unpack(vim.api.nvim_buf_get_mark(0, '>'))
-  local lines = vim.fn.getline(start_row, end_row) --[[ @as string[] ]]
-  if #lines > 0 and start_col and end_col and end_col < string.len(lines[#lines]) then
-    if start_row == end_row then
-      lines[1] = lines[1]:sub(start_col + 1, end_col + 1)
-    else
-      lines[1] = lines[1]:sub(start_col + 1, -1)
-      lines[#lines] = lines[#lines]:sub(1, end_col + 1)
-    end
+  if not start_col then
+    start_col = 0
   end
-  return lines
-end
 
---- aborts all tasks
----@param context GrugFarContext
----@return boolean if any aborted
-function M.abortTasks(context)
-  local abortedAny = false
-  for _, abort_fn in pairs(context.state.abort) do
-    if abort_fn then
-      abort_fn()
-      abort_fn = nil
-      abortedAny = true
-    end
+  local end_row, end_col = unpack(vim.api.nvim_buf_get_mark(0, '>'))
+  if not end_col then
+    end_col = -1
   end
-  return abortedAny
+  if end_col > 0 then
+    end_col = end_col + 1 -- this is necessary due to end mark not being after the selection
+  end
+
+  local first_line = unpack(vim.api.nvim_buf_get_lines(0, start_row - 1, start_row, true))
+  if first_line and start_col > #first_line then
+    start_col = #first_line
+  end
+  local last_line = unpack(vim.api.nvim_buf_get_lines(0, end_row - 1, end_row, true))
+  if last_line and end_col > #last_line then
+    end_col = -1
+  end
+
+  local lines = vim.api.nvim_buf_get_text(0, start_row - 1, start_col, end_row - 1, end_col, {})
+
+  return lines, start_row, start_col, end_row, end_col
 end
 
 ---@param keymap KeymapDef
@@ -321,16 +328,12 @@ function M.getActionMapping(keymap)
   ---@diagnostic disable-next-line: undefined-field
   if vim.g.maplocalleader then
     ---@diagnostic disable-next-line: undefined-field
-    lhs = lhs:gsub('<localleader>', vim.g.maplocalleader)
+    lhs = lhs:gsub('<localleader>', vim.g.maplocalleader == ' ' and '<SPC>' or vim.g.maplocalleader)
   end
   ---@diagnostic disable-next-line: undefined-field
   if vim.g.mapleader then
     ---@diagnostic disable-next-line: undefined-field
     lhs = lhs:gsub('<leader>', vim.g.mapleader == ' ' and '<SPC>' or vim.g.mapleader)
-  end
-
-  if lhs:sub(1, 1) ~= '<' then
-    lhs = '<' .. lhs .. '>'
   end
 
   return lhs
@@ -351,8 +354,6 @@ function M.flagsStrContainsFlag(flagsStr, flagToCheck)
 
   return false
 end
-
-M.eol = is_win and '\r\n' or '\n'
 
 --- splits string into parts separated by whitespace, ignoring spaces preceded by \
 ---@param pathsStr string
@@ -400,7 +401,7 @@ end
 ---@param line string
 ---@return string
 function M.getLineWithoutCarriageReturn(line)
-  if not is_win then
+  if not M.is_win then
     return line
   end
 
@@ -413,48 +414,476 @@ function M.getLineWithoutCarriageReturn(line)
 end
 
 --- gets companion window in which open files
----@param context GrugFarContext
+---@param context grug.far.Context
 ---@param buf integer
----@return integer window
+---@return integer window, boolean isNew
 function M.getOpenTargetWin(context, buf)
+  local preferredLocation = context.options.openTargetWindow.preferredLocation
   local grugfar_win = vim.fn.bufwinid(buf)
+  -- get candidate windows in the current tab
   local tabpage = vim.api.nvim_win_get_tabpage(grugfar_win)
   local tabpage_windows = vim.api.nvim_tabpage_list_wins(tabpage)
   local target_windows = vim
     .iter(tabpage_windows)
     :filter(function(w)
+      if w == grugfar_win then
+        return false
+      end
+
       local b = vim.api.nvim_win_get_buf(w)
       if not b then
         return false
       end
 
-      local buftype = vim.api.nvim_get_option_value('buftype', { buf = buf })
-      return buftype and buftype ~= ''
+      local buftype = vim.api.nvim_get_option_value('buftype', { buf = b })
+      if not vim.b[b].__grug_far_scratch_buf and (not buftype or buftype ~= '') then
+        return false
+      end
+
+      local exclude = context.options.openTargetWindow.exclude
+      if exclude then
+        local filetype = vim.api.nvim_get_option_value('filetype', { buf = b })
+        for _, filter in ipairs(exclude) do
+          if type(filter) == 'string' then
+            if filetype == filter then
+              return false
+            end
+          elseif type(filter) == 'function' then
+            if filter(w) then
+              return false
+            end
+          end
+        end
+      end
+
+      return true
     end)
     :totable()
 
-  if #target_windows > 1 then
-    -- use prevWin if it's in current tab page
-    for _, win in ipairs(target_windows) do
-      if win == context.prevWin then
-        return context.prevWin
+  -- try to reuse a window that is already at preferredLocation
+  if #target_windows > 0 then
+    if preferredLocation == 'prev' then
+      for _, win in ipairs(target_windows) do
+        if win == context.prevWin then
+          return context.prevWin, false
+        end
       end
-    end
+    else
+      local ref_row, ref_col = unpack(vim.api.nvim_win_get_position(grugfar_win))
+      local candidate_win
+      local dist = 100000000000 -- some suitable large starting number
+      for _, win in ipairs(target_windows) do
+        local row, col = unpack(vim.api.nvim_win_get_position(win))
+        if
+          preferredLocation == 'left'
+          and row == ref_row
+          and col < ref_col
+          and (ref_col - col) < dist
+        then
+          dist = ref_col - col
+          candidate_win = win
+        elseif
+          preferredLocation == 'right'
+          and row == ref_row
+          and col > ref_col
+          and (col - ref_col) < dist
+        then
+          dist = col - ref_col
+          candidate_win = win
+        elseif
+          preferredLocation == 'above'
+          and col == ref_col
+          and row < ref_row
+          and (ref_row - row) < dist
+        then
+          dist = ref_row - row
+          candidate_win = win
+        elseif
+          preferredLocation == 'below'
+          and col == ref_col
+          and row > ref_row
+          and (row - ref_row) < dist
+        then
+          dist = row - ref_row
+          candidate_win = win
+        end
+      end
 
-    -- use another window in the tab page
-    for _, win in ipairs(target_windows) do
-      if win ~= grugfar_win then
-        return win
+      if candidate_win then
+        return candidate_win, false
       end
     end
   end
 
-  -- no other window apart from grug-far one, create one
-  vim.cmd('belowright split')
+  -- create window at preferred location, keeping focus in grug-far win
+  if
+    not (
+      preferredLocation == 'left'
+      or preferredLocation == 'right'
+      or preferredLocation == 'above'
+      or preferredLocation == 'below'
+    )
+  then
+    preferredLocation = 'left'
+  end
 
-  local win = vim.api.nvim_get_current_win()
-  vim.api.nvim_win_set_height(win, 20)
-  return win
+  local new_win = vim.api.nvim_open_win(buf, false, {
+    win = grugfar_win,
+    ---@diagnostic disable-next-line: assign-type-mismatch
+    split = preferredLocation,
+  })
+
+  return new_win, true
+end
+
+--- NOTE: this function lifted directly from neo-tree.nvim where it was produced
+--- through a process of much sweat, blood and tears :)
+--- https://github.com/nvim-neo-tree/neo-tree.nvim/blob/a77af2e764c5ed4038d27d1c463fa49cd4794e07/lua/neo-tree/utils/init.lua#L1057
+---
+--- Escapes a path primarily relying on `vim.fn.fnameescape`. This function should
+--- only be used when preparing a path to be used in a vim command, such as `:e`.
+---
+--- For Windows systems, this function handles punctuation characters that will
+--- be escaped, but may appear at the beginning of a path segment. For example,
+--- the path `C:\foo\(bar)\baz.txt` (where foo, (bar), and baz.txt are segments)
+--- will remain unchanged when escaped by `fnaemescape` on a Windows system.
+--- However, if that string is used to edit a file with `:e`, `:b`, etc., the open
+--- parenthesis will be treated as an escaped character and the path separator will
+--- be lost.
+---
+--- For more details, see issue #889 when this function was introduced, and further
+--- discussions in #1264, #1352, and #1448.
+--- @param path string
+--- @return string
+M.escape_path_for_cmd = function(path)
+  local escaped_path = vim.fn.fnameescape(path)
+  if M.is_win then
+    -- there is too much history to this logic to capture in a reasonable comment.
+    -- essentially, the following logic adds a number of `\` depending on the leading
+    -- character in a path segment. see #1264, #1352, and #1448 in neo-tree.nvim repo for more info.
+    local need_extra_esc = path:find '[%[%]`%$~]'
+    local esc = need_extra_esc and '\\\\' or '\\'
+    escaped_path = escaped_path:gsub('\\[%(%)%^&;]', esc .. '%1')
+    if need_extra_esc then
+      escaped_path = escaped_path:gsub("\\\\['` ]", '\\%1')
+    end
+  end
+  return escaped_path
+end
+
+--- Normalizes paths. Expands a tilde at the beginning, environment variables.
+--- Expands path providers into path lists.
+---@param paths string[]
+---@param context grug.far.Context
+---@return string[]
+M.normalizePaths = function(paths, context)
+  local pathProviders = context.options.pathProviders
+  local cwd = vim.fs.normalize(vim.fn.getcwd())
+  local normalizedPaths = {}
+  for _, path in ipairs(paths) do
+    local isProvider = false
+    if pathProviders and vim.startswith(path, '<') and vim.endswith(path, '>') then
+      local name = path:sub(2, -2)
+      for providerName, providerFn in pairs(pathProviders) do
+        if name == providerName then
+          isProvider = true
+          for _, p in ipairs(providerFn { prevWin = context.prevWin }) do
+            table.insert(normalizedPaths, M.normalizePath(p, cwd))
+          end
+        end
+      end
+    end
+    if not isProvider then
+      table.insert(normalizedPaths, M.normalizePath(path, cwd))
+    end
+  end
+
+  return vim.fn.uniq(vim.fn.sort(normalizedPaths)) --[[@as [string] ]]
+end
+
+--- Normalizes a path. Expands a tilde at the beginning, environment variables.
+--- Makes relative to cwd if under cwd
+---@param path string
+---@param cwd string
+---@return string
+M.normalizePath = function(path, cwd)
+  if vim.startswith(path, '.') then
+    return path
+  end
+  local normPath = vim.fs.normalize(path)
+  local relPath = vim.fs.relpath(cwd, normPath)
+  if relPath then
+    return relPath
+  end
+
+  return normPath
+end
+
+--- parse a string containing json separated by newline into a list of tables
+---@param str string
+---@return table[]
+M.str_to_json_list = function(str)
+  local json_lines = vim.split(str, '\n')
+  local json_data = {}
+  local i = 1
+  for j = 1, #json_lines, 1 do
+    local json_str = json_lines[i]
+    for k = i + 1, j, 1 do
+      json_str = json_str .. '\n' .. json_lines[k]
+    end
+
+    local success, json_entry = pcall(vim.json.decode, json_str)
+    if success then
+      table.insert(json_data, json_entry)
+      i = j + 1
+    end
+  end
+
+  return json_data
+end
+
+---@param strict? boolean Whether to require visual mode to be active to return, defaults to False
+---@return grug.far.VisualSelectionInfo?
+function M.get_current_visual_selection_info(strict)
+  local was_visual = M.leaveVisualMode()
+  if strict and not was_visual then
+    return
+  end
+  local lines, start_row, start_col, end_row, end_col = M.getVisualSelectionLines()
+
+  return {
+    file_name = vim.fn.expand '%:p:.',  -- relative path
+    lines = lines,
+    start_row = start_row,
+    start_col = start_col,
+    end_row = end_row,
+    end_col = end_col,
+  }
+end
+
+--- gets visual selection info as string
+---@param visual_selection_info grug.far.VisualSelectionInfo
+function M.get_visual_selection_info_as_str(visual_selection_info)
+  return 'buffer-range='
+    .. string.gsub(visual_selection_info.file_name, ' ', '\\ ')
+    .. ':'
+    .. visual_selection_info.start_row
+    .. ':'
+    .. visual_selection_info.start_col
+    .. '-'
+    .. visual_selection_info.end_row
+    .. ':'
+    .. visual_selection_info.end_col
+end
+
+--- gets buf range from string representation
+---@param str string
+---@return grug.far.VisualSelectionInfo?, string? err
+function M.parse_buf_range_str(str)
+  local prefix = 'buffer-range='
+  if str:sub(1, #prefix) ~= prefix then
+    return nil
+  end
+
+  local file_name, _start_row, _start_col, _end_row, _end_col =
+    string.match(str, 'buffer%-range=(.+):(%d+):(%d+)-(%d+):(-?%d+)')
+
+  local invalid_bufrange_message =
+  'Invalid buffer range provided! Format is "buffer-range=<file_path>:<start_row>:<start_col>-<end_row>:<end_col>"'
+
+  if not (file_name and _start_row and _start_col and _end_row and _end_col) then
+    return nil, invalid_bufrange_message
+  end
+  ---@cast file_name string
+
+  local buf = vim.fn.bufnr(file_name)
+  if buf == -1 then
+    return nil, 'Invalid buffer range provided! No buffer exists for the given file name.'
+  end
+  local num_lines = vim.api.nvim_buf_line_count(buf)
+
+  local start_row = tonumber(_start_row) --[[@as integer?]]
+  if not start_row then
+    return nil, invalid_bufrange_message
+  end
+  if start_row < 1 then
+    start_row = 1
+  elseif start_row > num_lines then
+    start_row = num_lines
+  end
+
+  local end_row = tonumber(_end_row) --[[@as integer?]]
+  if not end_row then
+    return nil, invalid_bufrange_message
+  end
+  if end_row < 1 then
+    end_row = 1
+  elseif end_row > num_lines then
+    end_row = num_lines
+  end
+  if end_row < start_row then
+    end_row = start_row
+  end
+
+  local start_col = tonumber(_start_col) --[[@as integer?]]
+  if not start_col then
+    return nil, invalid_bufrange_message
+  end
+  local first_line = unpack(vim.api.nvim_buf_get_lines(buf, start_row - 1, start_row, true))
+  if first_line and start_col > #first_line then
+    start_col = #first_line
+  end
+
+  local end_col = tonumber(_end_col) --[[@as integer?]]
+  if not end_col then
+    return nil, invalid_bufrange_message
+  end
+  local last_line = unpack(vim.api.nvim_buf_get_lines(buf, end_row - 1, end_row, true))
+  if last_line and end_col > #last_line then
+    end_col = -1
+  end
+
+  local bufrange = {
+    file_name = file_name,
+    lines = {},
+    start_col = start_col,
+    start_row = start_row,
+    end_col = end_col,
+    end_row = end_row,
+  } --[[@as grug.far.VisualSelectionInfo]]
+  bufrange.lines = M.readFromBufrange(bufrange)
+
+  return bufrange
+end
+
+--- reads lines from given buffer bufrange
+---@param bufrange grug.far.VisualSelectionInfo
+---@return string[] lines
+function M.readFromBufrange(bufrange)
+  local buf = vim.fn.bufnr(bufrange.file_name)
+  return vim.api.nvim_buf_get_text(
+    buf,
+    bufrange.start_row - 1,
+    bufrange.start_col,
+    bufrange.end_row - 1,
+    bufrange.end_col,
+    {}
+  )
+end
+
+--- writes given lines into buffer bufrange
+---@param bufrange grug.far.VisualSelectionInfo
+---@param lines string[]
+function M.writeInBufrange(bufrange, lines)
+  local buf = vim.fn.bufnr(bufrange.file_name)
+  vim.api.nvim_buf_set_text(
+    buf,
+    bufrange.start_row - 1,
+    bufrange.start_col,
+    bufrange.end_row - 1,
+    bufrange.end_col,
+    lines
+  )
+end
+
+--- converts a scratch buffer to a real buffer
+---@param buf integer
+function M.convertScratchBufToRealBuf(buf)
+  if vim.b[buf].__grug_far_scratch_buf then
+    vim.b[buf].__grug_far_scratch_buf = nil
+    vim.bo[buf].buftype = ''
+    vim.api.nvim_buf_call(buf, function()
+      vim.cmd 'keepjumps silent! edit!'
+    end)
+  end
+end
+
+--- converts any existing scratch buffer to a real buffer
+function M.convertAnyScratchBufToRealBuf()
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.b[b].__grug_far_scratch_buf then
+      M.convertScratchBufToRealBuf(b)
+    end
+  end
+end
+
+--- detects line ending
+---@param contents string
+function M.detect_eol(contents)
+  local pos = contents:find '\n'
+  if pos and pos > 1 and contents:sub(pos - 1, pos - 1) == '\r' then
+    return '\r\n' -- dos
+  else
+    return '\n'   -- unix and mac (post OSX)
+  end
+end
+
+M.eol = M.is_win and '\r\n' or '\n'
+
+--- strips trailing newline from str if it's there
+---@param str string
+---@return string
+function M.strip_trailing_newline(str)
+  if vim.endswith(str, '\n') then
+    return str:sub(1, -2)
+  end
+
+  return str
+end
+
+--- replaces old with new in str once
+---@param str string
+---@param old string
+---@param new string
+function M.str_replace_once(str, old, new)
+  local start, _end = str:find(old, 1, true)
+  if start == nil then
+    return str
+  else
+    return str:sub(1, start - 1) .. new .. str:sub(_end + 1)
+  end
+end
+
+--- show row above the top line so that extmark virtual lines appear
+--- fix for this bug: https://github.com/neovim/neovim/issues/16166
+---@param context grug.far.Context
+---@param buf integer
+function M.fixShowTopVirtLines(context, buf)
+  local top_screenpos = vim.fn.screenpos(0, 1, 0)
+  local topVisible = top_screenpos.row ~= 0
+
+  local topfill = 0
+
+  if topVisible then
+    if context.options.helpLine.enabled then
+      topfill = topfill + 1
+    end
+
+    if context.options.showInputsTopPadding then
+      topfill = topfill + 1
+    end
+
+    if not context.options.showCompactInputs then
+      topfill = topfill + 1 -- first input label
+    end
+  end
+
+  local grugfar_win = vim.fn.bufwinid(buf)
+  vim.fn.win_execute(grugfar_win, 'lua vim.fn.winrestview({ topfill = ' .. topfill .. ' })')
+end
+
+--- gets bufrange if we have one specified in paths
+---@param inputStr string
+---@return grug.far.VisualSelectionInfo? bufrange, string? err
+function M.getBufrange(inputStr)
+  if #inputStr > 0 then
+    local paths = M.splitPaths(inputStr)
+    for _, path in ipairs(paths) do
+      return M.parse_buf_range_str(path)
+    end
+  end
+
+  return nil, nil
 end
 
 return M

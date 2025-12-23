@@ -2,13 +2,13 @@ local is_win = vim.api.nvim_call_function('has', { 'win32' }) == 1
 
 local M = {}
 
----@class Dependency
+---@class grug.far.Dependency
 ---@field name string
 ---@field url string
 ---@field optional boolean
 ---@field binaries? string[]
 
----@type Dependency[]
+---@type grug.far.Dependency[]
 local dependencies = {
   {
     name = 'rg',
@@ -16,13 +16,13 @@ local dependencies = {
     optional = false,
   },
   {
-    name = 'sg',
+    name = 'ast-grep',
     url = '[ast-grep](https://ast-grep.github.io)',
     optional = true,
   },
 }
 
----@param dep Dependency
+---@param dep grug.far.Dependency
 local function check_binary_installed(dep)
   local binaries = dep.binaries or { dep.name }
   for _, binary in ipairs(binaries) do

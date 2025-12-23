@@ -10,8 +10,8 @@ local uv = vim.uv
 local M = {}
 
 --- get search args
----@param inputs GrugFarInputs
----@param options GrugFarOptions
+---@param inputs grug.far.Inputs
+---@param options grug.far.Options
 ---@return string[]?
 function M.getSearchArgs(inputs, options)
   local extraArgs = { '--json' }
@@ -35,17 +35,43 @@ function M.isSearchWithReplacement(args)
   return false
 end
 
----@class ResultsWithReplaceDiffParams
----@field json_data RipgrepJson[]
----@field options GrugFarOptions
----@field inputs GrugFarInputs
----@field on_finish fun(status: GrugFarStatus, errorMesage: string?, results: ParsedResultsData?)
-
 --- adds results of doing a replace to results of doing a search
----@param params ResultsWithReplaceDiffParams
+---@param params {
+--- json_data: RipgrepJson[],
+--- options: grug.far.Options,
+--- inputs: grug.far.Inputs,
+--- bufrange: grug.far.VisualSelectionInfo,
+--- on_finish: fun(status: grug.far.Status, errorMessage: string?, results: grug.far.ParsedResultsData?),
+--- }
 ---@return fun()? abort
 local function getResultsWithReplaceDiff(params)
   local json_data = params.json_data
+
+  local has_matches = false
+  local needs_replacement = true
+  for _, json_result in ipairs(json_data) do
+    if json_result.type == 'match' then
+      local first_submatch = json_result.data.submatches[1]
+      if first_submatch then
+        has_matches = true
+        needs_replacement = not first_submatch.replacement
+        break
+      end
+    end
+  end
+  if not has_matches then
+    params.on_finish('success', nil, nil)
+    return
+  end
+
+  local bufrange = vim.deepcopy(params.bufrange)
+  local showDiff = params.options.engines.ripgrep.showReplaceDiff
+  if not needs_replacement then
+    local results = parseResults.parseResults(json_data, true, showDiff, bufrange, true)
+    params.on_finish('success', nil, results)
+    return
+  end
+
   local matches_for_replacement = {}
   for _, json_result in ipairs(json_data) do
     if json_result.type == 'match' then
@@ -54,28 +80,34 @@ local function getResultsWithReplaceDiff(params)
       end
     end
   end
-  if #matches_for_replacement == 0 then
-    params.on_finish('success', nil, nil)
-    return
-  end
 
   local stdin = uv.new_pipe()
   local replaced_matches_text = nil
-  local match_separator = '\029'
+  local match_separator = '\0'
 
   local replaceInputs = vim.deepcopy(params.inputs)
   replaceInputs.paths = ''
   replaceInputs.filesFilter = ''
-  local replaceArgs = getArgs(
-    replaceInputs,
-    params.options,
-    { '--color=never', '--no-heading', '--no-line-number', '--no-column', '--no-filename' }
-  ) --[[ @as string[] ]]
+  local replaceArgs = getArgs(replaceInputs, params.options, {
+    '--color=never',
+    '--no-heading',
+    '--no-line-number',
+    '--no-column',
+    '--no-filename',
+    '--null-data',
+  }) --[[ @as string[] ]]
 
+  local inputString = ''
+  for _, piece in ipairs(matches_for_replacement) do
+    inputString = inputString .. piece .. match_separator
+  end
+
+  local hadNoResults = true
   local abort = fetchCommandOutput({
     cmd_path = params.options.engines.ripgrep.path,
     args = replaceArgs,
     stdin = stdin,
+    fixChunkLineTruncation = false, -- NOTE: perf improvement
     on_fetch_chunk = function(data)
       replaced_matches_text = replaced_matches_text and replaced_matches_text .. data or data
     end,
@@ -93,8 +125,11 @@ local function getResultsWithReplaceDiff(params)
           end
         end
 
-        local showDiff = params.options.engines.ripgrep.showReplaceDiff
-        local results = parseResults.parseResults(json_data, true, showDiff)
+        local results = parseResults.parseResults(json_data, true, showDiff, bufrange, hadNoResults)
+        if #results.lines > 0 then
+          hadNoResults = false
+        end
+
         params.on_finish(status, nil, results)
       else
         params.on_finish(status, errorMessage)
@@ -102,65 +137,85 @@ local function getResultsWithReplaceDiff(params)
     end,
   })
 
-  uv.write(
-    stdin,
-    vim.fn.join(matches_for_replacement, match_separator) .. match_separator,
-    function()
-      uv.shutdown(stdin)
-    end
-  )
+  uv.write(stdin, inputString, function()
+    uv.shutdown(stdin)
+  end)
 
   return abort
 end
 
----@class RipgrepEngineSearchParams
+---@class grug.far.RipgrepEngineSearchParams
+---@field stdin uv_pipe_t?
 ---@field args string[]?
----@field options GrugFarOptions
----@field inputs GrugFarInputs
----@field on_fetch_chunk fun(data: ParsedResultsData)
----@field on_finish fun(status: GrugFarStatus, errorMesage: string?, customActionMessage: string?)
+---@field options grug.far.Options
+---@field inputs grug.far.Inputs
+---@field bufrange? grug.far.VisualSelectionInfo
+---@field on_fetch_chunk fun(data: grug.far.ParsedResultsData)
+---@field on_finish fun(status: grug.far.Status, errorMessage: string?, customActionMessage: string?)
 
 --- runs search
----@param params RipgrepEngineSearchParams
+---@param params grug.far.RipgrepEngineSearchParams
 ---@return fun()? abort, string[]? effectiveArgs
 local function run_search(params)
+  local bufrange = vim.deepcopy(params.bufrange)
+  local matches = {}
+
+  local hadNoResults = true
   return fetchCommandOutput({
     cmd_path = params.options.engines.ripgrep.path,
     args = params.args,
+    stdin = params.stdin,
     on_fetch_chunk = function(data)
-      local json_lines = vim.split(data, '\n')
-      local json_data = {}
-      for _, json_line in ipairs(json_lines) do
-        if #json_line > 0 then
-          local success, entry = pcall(vim.json.decode, json_line)
-          if not success then
-            params.on_fetch_chunk({
-              lines = vim
-                .iter(vim.split(data, '\n'))
-                :map(utils.getLineWithoutCarriageReturn)
-                :totable(),
-              highlights = {},
-              stats = { matches = 0, files = 0 },
-            })
-            return
-          end
-          table.insert(json_data, entry)
-        end
+      if #data == 0 then
+        return
       end
-      local results = parseResults.parseResults(json_data, false, false)
+
+      -- handle non-json data (like when running rg with --help flag)
+      if not vim.startswith(data, '{') then
+        params.on_fetch_chunk({
+          lines = vim.iter(vim.split(data, '\n')):map(utils.getLineWithoutCarriageReturn):totable(),
+          highlights = {},
+          marks = {},
+          stats = { matches = 0, files = 0 },
+        })
+        return
+      end
+
+      -- note: we split off last file matches to ensure all matches for a file are processed at once.
+      local json_list = utils.str_to_json_list(data)
+      for _, match in ipairs(json_list) do
+        table.insert(matches, match)
+      end
+      local before, after = parseResults.split_last_file_matches(matches)
+      matches = after
+      local results = parseResults.parseResults(before, false, false, bufrange, hadNoResults)
       params.on_fetch_chunk(results)
+      if #results.lines > 0 then
+        hadNoResults = false
+      end
     end,
     on_finish = function(status, errorMessage)
       if status == 'error' and errorMessage and #errorMessage == 0 then
         errorMessage = 'no matches'
       end
-      params.on_finish(status, errorMessage)
+      if status == 'success' and #matches > 0 then
+        -- do the last few
+        local results = parseResults.parseResults(matches, false, false, bufrange, hadNoResults)
+        params.on_fetch_chunk(results)
+        if #results.lines > 0 then
+          hadNoResults = false
+        end
+        matches = {}
+      end
+      vim.schedule(function()
+        params.on_finish(status, errorMessage)
+      end)
     end,
   })
 end
 
 --- runs search with replace diff
----@param params RipgrepEngineSearchParams
+---@param params grug.far.RipgrepEngineSearchParams
 ---@return fun()? abort, string[]? effectiveArgs
 local function run_search_with_replace(params)
   local abortSearch = nil
@@ -189,34 +244,37 @@ local function run_search_with_replace(params)
     on_finish(nil, nil)
   end
 
-  local searchArgs = argUtils.stripReplaceArgs(params.args)
-
+  local matches = {}
   processingQueue = ProcessingQueue.new(function(data, on_done)
-    local json_lines = vim.split(data, '\n')
-    local json_data = {}
-    for _, json_line in ipairs(json_lines) do
-      if #json_line > 0 then
-        local success, entry = pcall(vim.json.decode, json_line)
-        if not success then
-          on_fetch_chunk({
-            lines = vim
-              .iter(vim.split(data, '\n'))
-              :map(utils.getLineWithoutCarriageReturn)
-              :totable(),
-            highlights = {},
-            stats = { matches = 0, files = 0 },
-          })
-          on_done()
-          return
-        end
-        table.insert(json_data, entry)
-      end
+    if #data == 0 then
+      on_done()
+      return
     end
 
+    -- handle non-json data (like when running rg with --help flag)
+    if not vim.startswith(data, '{') then
+      on_fetch_chunk({
+        lines = vim.iter(vim.split(data, '\n')):map(utils.getLineWithoutCarriageReturn):totable(),
+        highlights = {},
+        marks = {},
+        stats = { matches = 0, files = 0 },
+      })
+      on_done()
+      return
+    end
+
+    local json_data = utils.str_to_json_list(data)
+    for _, match in ipairs(json_data) do
+      table.insert(matches, match)
+    end
+    local before, after = parseResults.split_last_file_matches(matches)
+    matches = after
+
     getResultsWithReplaceDiff({
-      json_data = json_data,
+      json_data = before,
       inputs = params.inputs,
       options = params.options,
+      bufrange = params.bufrange,
       on_finish = function(status, errorMessage, results)
         if status == 'success' then
           if results then
@@ -234,7 +292,8 @@ local function run_search_with_replace(params)
 
   abortSearch, effectiveArgs = fetchCommandOutput({
     cmd_path = params.options.engines.ripgrep.path,
-    args = searchArgs,
+    args = params.args,
+    stdin = params.stdin,
     on_fetch_chunk = function(data)
       processingQueue:push(data)
     end,
@@ -243,6 +302,10 @@ local function run_search_with_replace(params)
         errorMessage = 'no matches'
       end
       if status == 'success' then
+        if #matches > 0 then
+          -- do the last few
+          processingQueue:push('{}')
+        end
         processingQueue:on_finish(function()
           processingQueue:stop()
           on_finish(status, errorMessage)
@@ -258,8 +321,8 @@ local function run_search_with_replace(params)
 end
 
 --- runs search with replacement interpreter
----@param replacementInterpreter GrugFarReplacementInterpreter
----@param params RipgrepEngineSearchParams
+---@param replacementInterpreter grug.far.ReplacementInterpreter
+---@param params grug.far.RipgrepEngineSearchParams
 ---@return fun()? abort, string[]? effectiveArgs
 local function run_search_with_replace_interpreter(replacementInterpreter, params)
   local eval_fn, interpreterError =
@@ -272,38 +335,60 @@ local function run_search_with_replace_interpreter(replacementInterpreter, param
   local searchArgs = argUtils.stripReplaceArgs(params.args)
   local chunk_error = nil
   local abort, effectiveArgs
+  local bufrange = vim.deepcopy(params.bufrange)
+  local matches = {}
+  local hadNoResults = true
   abort, effectiveArgs = fetchCommandOutput({
     cmd_path = params.options.engines.ripgrep.path,
     args = searchArgs,
+    stdin = params.stdin,
     on_fetch_chunk = function(data)
       if chunk_error then
         return
       end
+      if #data == 0 then
+        return
+      end
 
-      local json_lines = vim.split(data, '\n')
-      local json_data = {}
-      for _, json_line in ipairs(json_lines) do
-        if #json_line > 0 then
-          local entry = vim.json.decode(json_line)
-          if entry.type == 'match' then
-            for _, submatch in ipairs(entry.data.submatches) do
-              ---@cast eval_fn fun(...): string
-              local replacementText, err = eval_fn(submatch.match.text)
-              if err then
-                chunk_error = err
-                if abort then
-                  abort()
-                end
-                return
+      -- handle non-json data (like when running rg with --help flag)
+      if not vim.startswith(data, '{') then
+        params.on_fetch_chunk({
+          lines = vim.iter(vim.split(data, '\n')):map(utils.getLineWithoutCarriageReturn):totable(),
+          highlights = {},
+          marks = {},
+          stats = { matches = 0, files = 0 },
+        })
+        return
+      end
+
+      local json_list = utils.str_to_json_list(data)
+      for _, entry in ipairs(json_list) do
+        if entry.type == 'match' then
+          for _, submatch in ipairs(entry.data.submatches) do
+            ---@cast eval_fn fun(...): string
+            local replacementText, err = eval_fn(submatch.match.text)
+            if err then
+              chunk_error = err
+              if abort then
+                abort()
               end
-              submatch.replacement = { text = replacementText }
+              return
             end
+            submatch.replacement = { text = replacementText }
           end
-          table.insert(json_data, entry)
         end
       end
-      local results = parseResults.parseResults(json_data, true, true)
+
+      for _, match in ipairs(json_list) do
+        table.insert(matches, match)
+      end
+      local before, after = parseResults.split_last_file_matches(matches)
+      matches = after
+      local results = parseResults.parseResults(before, true, true, bufrange, hadNoResults)
       params.on_fetch_chunk(results)
+      if #results.lines > 0 then
+        hadNoResults = false
+      end
     end,
     on_finish = function(status, errorMessage)
       if status == 'error' and errorMessage and #errorMessage == 0 then
@@ -313,7 +398,18 @@ local function run_search_with_replace_interpreter(replacementInterpreter, param
         status = 'error'
         errorMessage = chunk_error
       end
-      params.on_finish(status, errorMessage)
+      if status == 'success' and #matches > 0 then
+        -- do the last few
+        local results = parseResults.parseResults(matches, true, true, bufrange, hadNoResults)
+        params.on_fetch_chunk(results)
+        if #results.lines > 0 then
+          hadNoResults = false
+        end
+        matches = {}
+      end
+      vim.schedule(function()
+        params.on_finish(status, errorMessage)
+      end)
     end,
   })
 
@@ -321,7 +417,7 @@ local function run_search_with_replace_interpreter(replacementInterpreter, param
 end
 
 --- does search
----@param params EngineSearchParams
+---@param params grug.far.EngineSearchParams
 ---@return fun()? abort, string[]? effectiveArgs
 function M.search(params)
   local options = params.options
@@ -335,35 +431,74 @@ function M.search(params)
     )
     return
   end
+  local numSearchChars = #params.inputs.search
+  if numSearchChars > 0 and numSearchChars < (params.options.minSearchChars or 1) then
+    params.on_finish(
+      'success',
+      nil,
+      'Please enter at least '
+        .. params.options.minSearchChars
+        .. ' search chars to trigger search!'
+    )
+    return
+  end
 
-  local args = M.getSearchArgs(params.inputs, params.options)
+  local bufrange, bufrange_err = utils.getBufrange(params.inputs.paths)
+  if bufrange_err then
+    params.on_finish('error', bufrange_err)
+    return
+  end
+
+  local inputs = vim.deepcopy(params.inputs)
+  if bufrange then
+    inputs.paths = ''
+  end
+  local args = M.getSearchArgs(inputs, params.options)
   local isSearchWithReplace = M.isSearchWithReplacement(args)
+  local stdin = bufrange and uv.new_pipe() or nil
 
+  local abort, effectiveArgs
   if params.replacementInterpreter then
-    return run_search_with_replace_interpreter(params.replacementInterpreter, {
+    abort, effectiveArgs = run_search_with_replace_interpreter(params.replacementInterpreter, {
+      stdin = stdin,
       options = options,
-      inputs = params.inputs,
+      inputs = inputs,
+      bufrange = bufrange,
       args = args,
       on_fetch_chunk = params.on_fetch_chunk,
       on_finish = params.on_finish,
     })
   elseif isSearchWithReplace then
-    return run_search_with_replace({
+    abort, effectiveArgs = run_search_with_replace({
+      stdin = stdin,
       options = options,
-      inputs = params.inputs,
+      inputs = inputs,
+      bufrange = bufrange,
       args = args,
       on_fetch_chunk = params.on_fetch_chunk,
       on_finish = params.on_finish,
     })
   else
-    return run_search({
+    abort, effectiveArgs = run_search({
+      stdin = stdin,
       options = options,
-      inputs = params.inputs,
+      inputs = inputs,
+      bufrange = bufrange,
       args = args,
       on_fetch_chunk = params.on_fetch_chunk,
       on_finish = params.on_finish,
     })
   end
+
+  if stdin and bufrange then
+    -- note: ripgrep parsing expects a trailing newline
+    local text = table.concat(bufrange.lines, utils.eol) .. utils.eol
+    uv.write(stdin, text, function()
+      uv.shutdown(stdin)
+    end)
+  end
+
+  return abort, effectiveArgs
 end
 
 return M

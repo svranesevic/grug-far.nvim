@@ -1,91 +1,46 @@
-local resultsList = require('grug-far.render.resultsList')
 local utils = require('grug-far.utils')
+local resultsList = require('grug-far.render.resultsList')
 
---- gets result location that we should open and row in buffer where it is referenced
----@param buf integer
----@param context GrugFarContext
----@param cursor_row integer
----@param increment -1 | 1 | nil
----@param count integer?
----@return ResultLocation?, integer?
-local function getLocation(buf, context, cursor_row, increment, count)
-  if increment then
-    local start_location = resultsList.getResultLocation(cursor_row - 1, buf, context)
+--- opens location at current cursor line (if there is one) in target window
+---@param params { buf: integer, context: grug.far.Context, useScratchBuffer?: boolean }
+local function openLocation(params)
+  local buf = params.buf
+  local context = params.context
+  local useScratchBuffer = params.useScratchBuffer
 
-    local num_lines = vim.api.nvim_buf_line_count(buf)
-    for i = cursor_row + increment, increment > 0 and num_lines or 1, increment do
-      local location = resultsList.getResultLocation(i - 1, buf, context)
-      if
-        location
-        and location.lnum
-        and not (
-          start_location
-          and location.filename == start_location.filename
-          and location.lnum == start_location.lnum
-        )
-      then
-        return location, i
-      end
-    end
-  else
-    if count > 0 then
-      for markId, location in pairs(context.state.resultLocationByExtmarkId) do
-        if location.count == count then
-          local row, _, details = unpack(
-            vim.api.nvim_buf_get_extmark_by_id(
-              buf,
-              context.locationsNamespace,
-              markId,
-              { details = true }
-            )
-          )
-          if details and not details.invalid then
-            ---@cast row integer
-            return location, row + 1
+  local location = resultsList.getResultLocationAtCursor(buf, context)
+  if not location then
+    return
+  end
+
+  local targetWin = utils.getOpenTargetWin(context, buf)
+
+  local targetBuf = vim.fn.bufnr(location.filename)
+  if targetBuf == -1 then
+    targetBuf = vim.api.nvim_create_buf(true, false)
+    -- load lines into target buf and highlight them manually (to prevent LSP kickoff)
+    vim.api.nvim_buf_set_name(targetBuf, location.filename)
+
+    if useScratchBuffer then
+      vim.bo[targetBuf].buftype = 'nofile'
+      vim.b[targetBuf].__grug_far_scratch_buf = true
+      local lines = utils.readFileLinesSync(location.filename)
+      if lines then
+        vim.api.nvim_buf_set_lines(targetBuf, 0, -1, false, lines)
+        local ft = utils.getFileType(location.filename)
+        if ft then
+          local lang = vim.treesitter.language.get_lang(ft)
+          if not pcall(vim.treesitter.start, targetBuf, lang) then
+            vim.bo[buf].syntax = ft
           end
         end
       end
     else
-      return resultsList.getResultLocation(cursor_row - 1, buf, context), cursor_row
+      vim.api.nvim_buf_call(targetBuf, function()
+        vim.cmd('keepjumps silent! edit!')
+      end)
     end
-  end
-end
 
---- opens location at current cursor line (if there is one) in previous window
---- if count > 0 given, it will use the result location with that number instead
---- if increment is given, it will use the first location that is at least <increment> away from the current line
----@param params { buf: integer, context: GrugFarContext, increment: -1 | 1 | nil, count: number? }
-local function open(params)
-  local buf = params.buf
-  local context = params.context
-  local increment = params.increment
-  local count = params.count or 0
-  local grugfar_win = vim.fn.bufwinid(buf)
-
-  local cursor_row = unpack(vim.api.nvim_win_get_cursor(grugfar_win))
-  local location, row = getLocation(buf, context, cursor_row, increment, count)
-
-  if not location then
-    return
-  end
-  if row and row ~= cursor_row then
-    vim.api.nvim_win_set_cursor(grugfar_win, { row, 0 })
-  end
-
-  vim.api.nvim_command([[execute "normal! m` "]])
-
-  local targetWin = utils.getOpenTargetWin(context, buf)
-  local targetBuf = vim.fn.bufnr(location.filename)
-  if targetBuf == -1 then
-    vim.fn.win_execute(targetWin, 'e! ' .. vim.fn.fnameescape(location.filename), true)
-    targetBuf = vim.api.nvim_win_get_buf(targetWin)
-  else
-    vim.api.nvim_win_set_buf(targetWin, targetBuf)
-  end
-
-  vim.api.nvim_set_option_value('buflisted', true, { buf = targetBuf })
-
-  if not vim.b[targetBuf].__grug_far_was_visited then
     local bufHiddenAutocmdId, bufEnterAutocmdId
     bufHiddenAutocmdId = vim.api.nvim_create_autocmd({ 'BufHidden' }, {
       buffer = targetBuf,
@@ -93,25 +48,32 @@ local function open(params)
         vim.api.nvim_del_autocmd(bufHiddenAutocmdId)
         vim.api.nvim_del_autocmd(bufEnterAutocmdId)
         vim.api.nvim_set_option_value('buflisted', false, { buf = targetBuf })
+        vim.b[targetBuf].__grug_far_scratch_buf = nil
         vim.schedule(function()
           -- note: using bdelete! instead of nvim_buf_delete or bwipeout!
           -- due to an issue in nvim similar to this issue described in oil:
           -- https://github.com/stevearc/oil.nvim/issues/435
           ---@diagnostic disable-next-line: param-type-mismatch
-          pcall(vim.cmd, 'bdelete! ' .. targetBuf)
+          pcall(vim.cmd, 'bwipeout! ' .. targetBuf)
         end)
       end,
     })
     bufEnterAutocmdId = vim.api.nvim_create_autocmd({ 'WinEnter' }, {
       buffer = targetBuf,
       callback = function()
-        vim.b[targetBuf].__grug_far_was_visited = true
         vim.api.nvim_del_autocmd(bufHiddenAutocmdId)
         vim.api.nvim_del_autocmd(bufEnterAutocmdId)
+
+        if useScratchBuffer then
+          vim.schedule(function()
+            utils.convertScratchBufToRealBuf(targetBuf)
+          end)
+        end
       end,
     })
   end
 
+  vim.api.nvim_win_set_buf(targetWin, targetBuf)
   pcall(
     vim.api.nvim_win_set_cursor,
     targetWin,
@@ -119,4 +81,4 @@ local function open(params)
   )
 end
 
-return open
+return openLocation

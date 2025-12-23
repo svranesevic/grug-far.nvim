@@ -54,6 +54,7 @@ T['can manually save and reload from history'] = function()
 
   child.type_keys('<esc>24G', '<enter>')
   helpers.childWaitForScreenshotText(child, '4 matches in 2 files')
+  helpers.childWaitForFinishedStatus(child)
   helpers.childExpectScreenshot(child)
 end
 
@@ -78,7 +79,7 @@ T['auto-saves to history on replace'] = function()
   helpers.childWaitForUIVirtualText(child, 'replace completed!')
   helpers.childExpectScreenshot(child)
 
-  vim.uv.sleep(50) -- make sure history entry gets added
+  helpers.sleep(child, 50) -- make sure history entry gets added
   child.type_keys('<esc>' .. keymaps.historyOpen.n)
   helpers.childWaitForScreenshotText(child, 'History')
   helpers.childExpectScreenshot(child)
@@ -105,7 +106,7 @@ T['auto-saves to history on sync all'] = function()
   helpers.childWaitForUIVirtualText(child, 'sync completed!')
   helpers.childExpectScreenshot(child)
 
-  vim.uv.sleep(50) -- make sure history entry gets added
+  helpers.sleep(child, 50) -- make sure history entry gets added
   child.type_keys('<esc>' .. keymaps.historyOpen.n)
   helpers.childWaitForScreenshotText(child, 'History')
   helpers.childExpectScreenshot(child)
@@ -132,7 +133,7 @@ T['dedupes last history entry'] = function()
   child.type_keys('<esc>' .. keymaps.historyAdd.n)
   helpers.childWaitForScreenshotText(child, 'grug-far: added current search to history')
 
-  vim.uv.sleep(50) -- make sure history entry gets added
+  helpers.sleep(child, 50) -- make sure history entry gets added
   child.type_keys('<esc>' .. keymaps.historyOpen.n)
   helpers.childWaitForScreenshotText(child, 'History')
   helpers.childExpectScreenshot(child)
@@ -178,13 +179,14 @@ T['replacement interpreter swaps when reloading from history'] = function()
   child.type_keys('<esc>12G', '<enter>')
   helpers.childWaitForScreenshotText(child, '2 matches in 1 files')
   helpers.childWaitForScreenshotText(child, '[lua]')
-  helpers.childExpectScreenshot(child)
+  helpers.childWaitForFinishedStatus(child)
 
   child.type_keys('<esc>' .. keymaps.historyOpen.n)
   helpers.childWaitForScreenshotText(child, 'History')
 
   child.type_keys('<esc>3G', '<enter>')
   helpers.childWaitForScreenshotText(child, '1 matches in 1 files')
+  helpers.childWaitForFinishedStatus(child)
   helpers.childExpectScreenshot(child)
 end
 

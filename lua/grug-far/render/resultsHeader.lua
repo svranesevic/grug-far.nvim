@@ -1,7 +1,8 @@
 local opts = require('grug-far.opts')
+local inputs = require('grug-far.inputs')
 
 --- gets status text
----@param context GrugFarContext
+---@param context grug.far.Context
 ---@return string | nil
 local function getStatusText(context)
   local status = context.state.status
@@ -23,28 +24,39 @@ local function getStatusText(context)
 end
 
 --- gets separator line
----@param context GrugFarContext
+---@param context grug.far.Context
 ---@return string
 local function getSeparator(context)
   -- note: use a large number to ensure it's always > window width
   local separatorLine = context.options.resultsSeparatorLineChar:rep(400)
-  return ' '
-    .. (getStatusText(context) or '')
-    .. ' '
-    .. (opts.getIcon('resultsEngineLeft', context) or '')
-    .. ' '
-    .. context.engine.type
-    .. ' '
-    .. (context.state.normalModeSearch and '- normal mode search ' or '')
-    .. (opts.getIcon('resultsEngineRight', context) or '')
-    .. separatorLine
+
+  local engineInfo = ''
+  if context.options.showEngineInfo then
+    local engine_type = context.engine.type
+    local interpreter_type = context.replacementInterpreter and context.replacementInterpreter.type
+      or nil
+    if interpreter_type then
+      engine_type = engine_type .. ' | ' .. interpreter_type
+    end
+
+    engineInfo = (opts.getIcon('resultsEngineLeft', context) or '')
+      .. ' '
+      .. engine_type
+      .. ' '
+      .. (context.state.normalModeSearch and '- normal mode search ' or '')
+      .. (opts.getIcon('resultsEngineRight', context) or '')
+  end
+
+  local statusText = context.options.showStatusIcon and ' ' .. (getStatusText(context) or '') .. ' '
+    or ''
+
+  return statusText .. engineInfo .. separatorLine
 end
 
---- render stats information line
----@param buf integer
----@param context GrugFarContext
----@param headerRow integer
-local function renderInfoLine(buf, context, headerRow)
+--- gets stats information line
+---@param context grug.far.Context
+---@return grug.far.VirtText[]
+local function getInfoLine(context)
   local virt_texts = {}
 
   local stats = context.state.stats
@@ -61,43 +73,40 @@ local function renderInfoLine(buf, context, headerRow)
     table.insert(virt_texts, { icon .. actionMessage, 'GrugFarResultsActionMessage' })
   end
 
-  if #virt_texts > 0 then
-    context.extmarkIds.results_info_line =
-      vim.api.nvim_buf_set_extmark(buf, context.namespace, headerRow, 0, {
-        id = context.extmarkIds.results_info_line,
-        end_row = headerRow,
-        end_col = 0,
-        virt_lines = { virt_texts },
-        virt_lines_leftcol = true,
-        virt_lines_above = true,
-        right_gravity = false,
-      })
-  elseif context.extmarkIds.results_info_line then
-    vim.api.nvim_buf_del_extmark(buf, context.namespace, context.extmarkIds.results_info_line)
-    context.extmarkIds.results_info_line = nil
-  end
+  return virt_texts
 end
 
 ---@param buf integer
----@param context GrugFarContext
-local function renderResultsHeader(buf, context)
-  local headerRow = context.state.headerRow
+---@param context grug.far.Context
+---@param row? integer 0-based row, defaults to headerRow
+local function renderResultsHeader(buf, context, row)
+  local headerRow = row or inputs.getHeaderRow(context, buf)
+  local virt_lines = {}
+  if context.options.showInputsBottomPadding then
+    table.insert(virt_lines, { { '', 'Normal' } })
+  end
+
+  table.insert(virt_lines, { { getSeparator(context), 'GrugFarResultsHeader' } })
+
+  local infoLine = context.options.showStatusInfo and getInfoLine(context) or ''
+  if #infoLine > 0 then
+    table.insert(virt_lines, infoLine)
+  end
+  -- blank line
+  table.insert(virt_lines, { { '', 'Normal' } })
 
   context.extmarkIds.results_header =
     vim.api.nvim_buf_set_extmark(buf, context.namespace, headerRow, 0, {
       id = context.extmarkIds.results_header,
       end_row = headerRow,
       end_col = 0,
-      virt_lines = {
-        { { '', 'Normal' } },
-        { { getSeparator(context), 'GrugFarResultsHeader' } },
-      },
+      virt_lines = virt_lines,
       virt_lines_leftcol = true,
       virt_lines_above = true,
       right_gravity = false,
     })
 
-  renderInfoLine(buf, context, headerRow)
+  context.throttledOnStatusChange(buf)
 end
 
 return renderResultsHeader
